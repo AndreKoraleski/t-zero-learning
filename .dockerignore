@@ -1,0 +1,8 @@
+docker/
+scripts/
+logs/
+runs/
+wandb/
+configs/
+.git/
+.gitignore

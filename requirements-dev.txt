@@ -1,0 +1,2 @@
+# Development / CI extras — install on top of requirements.txt
+pytest==8.4.1

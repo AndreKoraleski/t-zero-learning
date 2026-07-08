@@ -1,0 +1,4 @@
+- The code is meant to be a basis where other developers, researchers, and students will start from to apply RL to new envs, experiments, algorithms, etc.
+- The code is not meant to be a library for other codes, nor obfuscate inner workings for the sake of an easy function call.
+- The code should be easily readable and intuitive even from a student's  perspective.
+- Developers working on top of the code should have the most control and clearest transparency on how it works.

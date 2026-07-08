@@ -1,0 +1,49 @@
+# Apptainer/Singularity definition file for t-zero
+# Mirrors docker/Dockerfile (nvcr pytorch base + a few system libs + pip requirements).
+#
+# Build (example):
+#   apptainer build --fakeroot t-zero.sif cluster/t-zero.def
+# or:
+#   singularity build --fakeroot t-zero.sif cluster/t-zero.def
+
+Bootstrap: docker
+From: nvcr.io/nvidia/pytorch:24.12-py3
+
+%environment
+    export PYTHONUNBUFFERED=1
+    export PIP_DISABLE_PIP_VERSION_CHECK=1
+    # For MuJoCo headless rendering via EGL
+    export MUJOCO_GL=egl
+
+%post
+    set -eux
+
+    # Singularity/Apptainer builds sometimes run apt with a sandbox user; force root.
+    echo 'APT::Sandbox::User "root";' > /etc/apt/apt.conf.d/no-sandbox
+
+    apt-get update && apt-get install -y --no-install-recommends \
+        ffmpeg \
+        libgl1 \
+        libegl1 \
+        libglfw3 \
+        libglew2.2 \
+     && rm -rf /var/lib/apt/lists/*
+
+    python -m pip install --upgrade pip
+
+    # Install dependencies directly (avoids %files path resolution issues with --fakeroot)
+    python -m pip install \
+        python-dotenv==1.1.1 \
+        'gymnasium[mujoco]==1.2.0' \
+        tyro==0.9.28 \
+        wandb==0.21.1 \
+        moviepy==2.2.1 \
+        metaworld
+
+    mkdir -p /t-zero
+
+%runscript
+    exec "$@"
+
+
+

@@ -1,0 +1,20 @@
+services:
+  t-zero:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile # the dockerfile to use for building the image
+    image: t-zero:latest # the image to use for the container
+    working_dir: /t-zero # the base working directory
+    volumes:
+      - .:/t-zero # the folder to mount and map inside the container
+    env_file:
+      - .env # the environment variables to use inside the container
+    tty: true # allows the container to use the terminal
+    stdin_open: true # allows the container to use the standard input
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

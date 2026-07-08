@@ -1,0 +1,35 @@
+# Quickstart config — PPO on Pendulum-v1. Trains in a few minutes on CPU.
+#
+# Every key maps onto a dataclass field (unknown keys fail at startup):
+#   run-level keys          -> core/base_config.py::RunConfig
+#   agent:                  -> core/base_config.py::AgentConfig
+#   ppo_continuous_action:  -> algorithms/ppo_continuous_action.py::PPOConfig
+# Keys left out keep the dataclass defaults.
+
+algorithm: ppo_continuous_action
+env_id: Pendulum-v1
+seed: 1
+cuda: false            # CPU is plenty for this env
+total_timesteps: 500000 # ~3 min on CPU; reaches ~-200 mean return (sampled eval)
+num_envs: 4
+
+track: false           # set true (and fill .env) to log to Weights & Biases
+capture_video: true
+video_every_global_steps: 250000
+video_length_seconds: 8.0
+save_model: true       # write model.pt + run a final evaluation
+checkpoint_every: 25000 # rotating resume bundles (checkpoint_gs*.pt)
+
+agent:
+  activation: Tanh
+  hidden_layers_size: 64
+  use_obs_norm: true   # running mean/var obs normalization, as in CleanRL
+
+ppo_continuous_action:
+  learning_rate: 1.0e-3
+  num_steps: 1024      # rollout length per env -> batch = num_envs * num_steps
+  gamma: 0.9           # short horizon suits Pendulum
+  gae_lambda: 0.95
+  num_minibatches: 32
+  update_epochs: 10
+  ent_coef: 0.0

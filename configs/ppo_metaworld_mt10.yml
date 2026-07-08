@@ -1,0 +1,60 @@
+# PPO on Meta-World MT10 — hyperparameters aligned with rainx0r/metaworld-algorithms
+# Reference: https://github.com/rainx0r/metaworld-algorithms/blob/main/examples/multi_task/ppo_mt10.py
+# plus defaults from metaworld_algorithms/rl/algorithms/ppo.py (PPOConfig),
+# metaworld_algorithms/config/nn.py (NeuralNetworkConfig / VanillaNetworkConfig),
+# and metaworld_algorithms/config/optim.py (OptimizerConfig).
+#
+# Run: python train.py --config ppo_metaworld_mt10
+#
+# Also demonstrates the split-optimizer PPO variant (separate actor/critic
+# optimizers) — see algorithms/ppo_continuous_action_split_optim.py.
+#
+# Intentional differences from upstream (this repo is CleanRL-style PyTorch):
+# - Upstream MT10 PPO uses baseline_type="linear" and vf_config=None (no MLP value net);
+#   we always train a shared MLP critic. vf_coef is kept at 0.5 for stable value learning
+#   (their PPOConfig default vf_coefficient is 0.001 when an MLP VF is used).
+# - Policy there is width=400, depth=3, ReLU (VanillaNetworkConfig defaults); we use two
+#   hidden layers of hidden_layers_size (set to 400 to match width).
+# - Action std: upstream uses state-dependent std (StdType.MLP_HEAD); we use learned
+#   per-dimension log_std as in cleanrl PPO continuous.
+# - Rollout length: upstream OnPolicyTrainingConfig.rollout_steps=10_000 with 10 tasks;
+#   their minibatch iterator uses num_gradient_steps=32 chunks of size rollout//32, which
+#   leaves a small tail unused. Here batch must split evenly: num_envs*num_steps=9600,
+#   num_minibatches=32 => 300 samples/minibatch (≈4% shorter rollout per update).
+algorithm: ppo_continuous_action_split_optim
+seed: 1
+torch_deterministic: true
+cuda: true
+track: false           # set true (and fill .env) to log to Weights & Biases
+capture_video: true
+video_every_global_steps: 0
+video_length_seconds: 15.0
+save_model: true
+checkpoint_every: 100000
+checkpoints_to_keep: 3
+num_envs: 10
+env_id: Meta-World/MT10
+env_kwargs:
+  use_one_hot: true
+  terminate_on_success: false
+  vector_strategy: async
+total_timesteps: 20000000
+special_log_every: 100000
+agent:
+  activation: ReLU
+  hidden_layers_size: 64
+ppo_continuous_action_split_optim:
+  learning_rate: 0.0003
+  anneal_lr: false
+  max_grad_norm: 1.0
+  gamma: 0.99
+  gae_lambda: 0.97
+  num_steps: 960
+  num_minibatches: 32
+  update_epochs: 16
+  norm_adv: false
+  clip_coef: 0.2
+  clip_vloss: false
+  ent_coef: 0.005
+  vf_coef: 0.5
+  target_kl: null

@@ -1,0 +1,9 @@
+python-dotenv==1.1.1
+gymnasium[mujoco,classic-control]==1.2.0
+torch==2.9.1
+numpy==2.2.6
+pyyaml==6.0.3
+tqdm==4.67.3
+wandb==0.21.1
+moviepy==2.2.1
+metaworld

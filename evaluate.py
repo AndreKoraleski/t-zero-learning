@@ -1,0 +1,178 @@
+#!/usr/bin/env python3
+"""
+Evaluate saved PPO checkpoints and record eval videos.
+
+Pass either:
+  - a **single run directory** (the folder that directly holds ``model.pt``
+    and ``config.yml``);
+  - an **experiment directory** (e.g. ``runs/ppo_antdir_goal_v4_8dir``): every immediate
+    child folder that contains those files is processed.
+
+Everything needed to rebuild the eval env (env id, kwargs, wrapper stack, network
+architecture) is read from the run's saved ``config.yml``.
+
+Examples (headless-friendly)::
+
+  MUJOCO_GL=egl python evaluate.py runs/my_exp/EnvId__hash__seed__ts --deterministic
+  MUJOCO_GL=egl python evaluate.py runs/my_exp --eval-episodes 5 --no-video
+
+Meta-World vector benchmarks (MT10/MT25/MT50) have a per-task evaluation protocol —
+use ``scripts/eval_metaworld.py`` for those runs instead.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+import torch
+import yaml
+
+from algorithms.base import evaluate_checkpoint
+from envs import make_env  # noqa: F401 — registers custom envs/adapters on import
+from envs.wrappers import continuous_control_wrappers, resolve_wrapper_stack
+from networks import ContinuousActorCritic
+
+MODEL_FILE = "model.pt"
+CONFIG_FILE = "config.yml"
+
+
+def iter_checkpoint_run_dirs(run_path: Path) -> list[Path]:
+    """Single run folder, or experiment root containing multiple run subfolders."""
+    run_path = run_path.resolve()
+    if not run_path.is_dir():
+        raise FileNotFoundError(f"not a directory: {run_path}")
+    if (run_path / MODEL_FILE).is_file() and (run_path / CONFIG_FILE).is_file():
+        return [run_path]
+    found: list[Path] = []
+    for child in sorted(run_path.iterdir(), key=lambda p: p.name):
+        if not child.is_dir():
+            continue
+        if (child / MODEL_FILE).is_file() and (child / CONFIG_FILE).is_file():
+            found.append(child)
+    return found
+
+
+def parse_run_config(cfg: dict) -> dict | None:
+    """Extract eval-relevant settings from a saved run ``config.yml``.
+
+    Handles the current nested format (``agent:`` plus a section named after
+    the algorithm, ``env_id`` + ``env_kwargs``) and falls back to legacy
+    formats (pre-rename ``ppo:`` section; flat top-level ``activation`` /
+    ``gamma``, ``task: "EnvId=>json"``).
+    Returns None when no env id can be determined.
+    """
+    env_id = cfg.get("env_id")
+    env_kwargs = dict(cfg.get("env_kwargs") or {})
+    if not env_id and "task" in cfg:  # legacy: task: "EnvId=>{json kwargs}"
+        task = str(cfg["task"])
+        env_id, _, kwargs_json = task.partition("=>")
+        env_id = env_id.strip()
+        if kwargs_json.strip():
+            env_kwargs = json.loads(kwargs_json)
+    if not env_id:
+        return None
+
+    agent = cfg.get("agent") or {}
+    algo = cfg.get(cfg.get("algorithm", ""), None) or cfg.get("ppo") or {}
+    return {
+        "env_id": env_id,
+        "env_kwargs": env_kwargs,
+        "activation": agent.get("activation", cfg.get("activation", "Tanh")),
+        "hidden_layers_size": int(
+            agent.get("hidden_layers_size", cfg.get("hidden_layers_size", 64))
+        ),
+        "use_obs_norm": bool(agent.get("use_obs_norm", False)),
+        "obs_norm_epsilon": float(agent.get("obs_norm_epsilon", 1e-8)),
+        "gamma": float(algo.get("gamma", cfg.get("gamma", 0.99))),
+        "wrappers": resolve_wrapper_stack(
+            cfg.get("env_wrappers", ""), continuous_control_wrappers
+        ),
+    }
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        "run_path",
+        type=Path,
+        help="a single run directory, or an experiment root (runs/...) holding several",
+    )
+    parser.add_argument(
+        "--device",
+        type=str,
+        default=None,
+        help="cpu | cuda (default: cuda if available else cpu)",
+    )
+    parser.add_argument(
+        "--eval-episodes",
+        type=int,
+        default=1,
+        help="number of eval episodes per run (default: 1)",
+    )
+    parser.add_argument(
+        "--deterministic",
+        action="store_true",
+        help="use policy mean actions (no sampling) for smoother behaviour/videos",
+    )
+    parser.add_argument(
+        "--no-video",
+        action="store_true",
+        help="skip video recording, only print episodic returns",
+    )
+    args = parser.parse_args()
+
+    if args.device is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    else:
+        device = torch.device(args.device)
+
+    run_dirs = iter_checkpoint_run_dirs(args.run_path)
+    if not run_dirs:
+        print(
+            f"No runs with {MODEL_FILE} and {CONFIG_FILE} under {args.run_path}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    for run_dir in run_dirs:
+        with open(run_dir / CONFIG_FILE, encoding="utf-8") as f:
+            cfg = yaml.safe_load(f)
+        run_cfg = parse_run_config(cfg)
+        if run_cfg is None:
+            print(f"skip {run_dir}: no 'env_id' in config", file=sys.stderr)
+            continue
+
+        env_kwargs = run_cfg["env_kwargs"]
+
+        print(
+            f"evaluating: {run_dir.name} (env={run_cfg['env_id']}, device={device}, "
+            f"episodes={args.eval_episodes}, deterministic={args.deterministic}, "
+            f"video={not args.no_video})"
+        )
+        results = evaluate_checkpoint(
+            str(run_dir / MODEL_FILE),
+            run_cfg["env_id"],
+            ContinuousActorCritic,
+            device=device,
+            eval_episodes=int(args.eval_episodes),
+            capture_video=not args.no_video,
+            gamma=run_cfg["gamma"],
+            experiment_dir=str(run_dir.parent),
+            run_name=run_dir.name,
+            env_kwargs=env_kwargs,
+            activation=run_cfg["activation"],
+            hidden_layers_size=run_cfg["hidden_layers_size"],
+            use_obs_norm=run_cfg["use_obs_norm"],
+            obs_norm_epsilon=run_cfg["obs_norm_epsilon"],
+            deterministic=bool(args.deterministic),
+            wrappers=run_cfg["wrappers"],
+        )
+        print(f"  {run_dir.name}: {results['metrics']}")
+
+
+if __name__ == "__main__":
+    main()
