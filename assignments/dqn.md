@@ -27,7 +27,7 @@ WANDB_PROJECT=dqn-assignment
 
 and run `wandb login` once.
 
-## Part 1 & 2 — Implementation (30%)
+## Part 1 & 2 — Implementation
 
 Complete the three blocks marked `YOUR CODE HERE` in `algorithms/dqn.py`:
 
@@ -56,55 +56,76 @@ A full CartPole run takes roughly 10–20 minutes on a laptop CPU and should rea
 episodic return near 500 (the maximum). If it doesn't, something is wrong — the tests
 passing is necessary but not sufficient.
 
-## Part 3 — Experimental report (70%)
+## The charts you will work with
 
-For each question below, follow this exact protocol:
+Every run logs these to wandb; your report should read from them (screenshots or
+wandb report links, always with the runs labeled):
 
-1. **Predict** (before running anything): write 2–4 sentences on what you expect to
-   happen to the episodic return and TD loss curves, and *why*, based on how the
-   algorithm works.
-2. **Run**: the baseline and the modified configuration, each with at least 2 seeds
-   (`--override seed=1`, `--override seed=2`). Include the wandb plots in the report.
-3. **Explain**: 1–2 paragraphs. Did the result match your prediction? Explain the
-   *mechanism* behind what you observed — "it got worse" is a description, not an
-   explanation.
+| Chart | What it tells you |
+|---|---|
+| `charts/episodic_return_mean_last100` | the learning curve — mean return over the last 100 episodes |
+| `losses/td_loss` | how far Q(s,a) is from the TD target on sampled batches |
+| `losses/q_values` | mean predicted Q — watch for divergence or runaway growth |
+| `charts/epsilon` | the exploration schedule actually used |
+| `charts/episodic_length_mean_last100` | episode length (on CartPole, ≡ return) |
+| `eval/mean_return`, `eval/std_return` | final 10-episode greedy evaluation |
 
-**Q1 — Target network.** Sync the target network every single step:
+A key habit this assignment trains: **never read a single chart in isolation.** The
+return curve tells you *whether* something went wrong; `td_loss` and `q_values`
+together often tell you *what*.
+
+## Part 3 — Experimental report
+
+For each question below, follow this protocol:
+
+1. **Sweep**: pick **at least three values** of the hyperparameter (your choice,
+   spanning small → large enough to expose the behavior), plus the baseline. Run each
+   configuration; where feasible, run 2 seeds for the configurations your argument
+   hinges on (`--override seed=2`).
+2. **Report the charts**: for each question, include the charts named below, with all
+   sweep values overlaid, runs labeled.
+3. **Explain**: 1–2 paragraphs on the *mechanism* behind what you observed — "it got
+   worse" is a description, not an explanation. Explanations must reference the
+   charts ("the q_values chart shows …, which means …").
+
+Overrides work like this (any key in [configs/dqn_cartpole.yml](../configs/dqn_cartpole.yml)):
 
 ```bash
-python train.py --config dqn_cartpole --override dqn.target_network_frequency=1
+python train.py --config dqn_cartpole --override dqn.target_network_frequency=1 seed=2
 ```
 
-What role does the target network play in DQN? What happens to the TD loss when the
-target moves at every step, and why can the return curve degrade even while the loss
-looks "fine"?
+**Q1 — Target network sync frequency** (`dqn.target_network_frequency`; 1 = a new
+target every step, large = a nearly frozen target).
+Charts to report: `charts/episodic_return_mean_last100`, `losses/td_loss`,
+`losses/q_values`.
+What role does the target network play? Why can the return curve degrade while
+`td_loss` still looks "fine"? What does `losses/q_values` do at your extreme values,
+and why?
 
-**Q2 — Replay buffer size.** Compare a tiny buffer against the default:
+**Q2 — Replay buffer size** (`dqn.buffer_size`; try tiny through generous).
+Charts to report: `charts/episodic_return_mean_last100`, `losses/q_values`.
+What two distinct problems does a very small buffer cause? (Hint: think about both
+the *correlation* of samples within a minibatch and *what data the network gets to
+see again*.)
 
-```bash
-python train.py --config dqn_cartpole --override dqn.buffer_size=500
-```
-
-What two distinct problems does a very small buffer cause? (Hint: think about both the
-*correlation* of samples within a minibatch and *what data the network gets to see
-again*.)
-
-**Q3 — Your choice.** Pick any one hyperparameter (`dqn.gamma`, `dqn.learning_rate`,
-`dqn.exploration_fraction`, `dqn.end_e`, `dqn.batch_size`, `dqn.train_frequency`, ...),
-choose a value you expect to change behavior meaningfully, and apply the same
-predict → run → explain protocol. Trivial choices (e.g., changing the seed) score zero.
+**Q3 — Your choice.** Pick any one other hyperparameter (`dqn.gamma`,
+`dqn.learning_rate`, `dqn.exploration_fraction`, `dqn.end_e`, `dqn.batch_size`,
+`dqn.train_frequency`, ...), sweep it the same way, and state *which charts you chose
+to report and why* — chart selection is part of the answer here (e.g., an exploration
+sweep without `charts/epsilon` is incomplete). Trivial choices (changing the seed)
+score zero.
 
 ## Grading
 
-| Component | Weight |
-|---|---|
-| Tests pass + working training run | 30% |
-| Q1–Q3: quality of predictions and explanations | 60% |
-| Report clarity (plots labeled, configs stated, seeds reported) | 10% |
+Exact weights will be announced separately; what is graded:
 
-**Wrong predictions cost nothing.** A wrong prediction followed by a correct mechanistic
-explanation of what actually happened gets full marks. A correct prediction with a
-hand-wavy explanation does not.
+- tests passing + a working baseline training run;
+- Q1–Q3: quality of the sweeps (sensible value ranges) and, above all, of the
+  mechanistic explanations grounded in the charts;
+- report clarity: plots labeled, configs and seeds stated, runs reproducible from
+  what you wrote.
+
+A modest sweep explained well beats an exhaustive sweep described vaguely.
 
 ## On AI assistants
 
@@ -115,4 +136,4 @@ prepared to explain any line of your code and any paragraph of your report if as
 ## Deliverables
 
 A link to your fork containing your completed `algorithms/dqn.py`, plus a PDF report
-(max ~4 pages) with the three predict → run → explain sections.
+(max ~4 pages) with the three sweep → charts → explain sections.
