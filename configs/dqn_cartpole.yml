@@ -1,0 +1,39 @@
+# DQN assignment config — CartPole-v1. Trains in ~10-20 min on CPU.
+#
+# Every key maps onto a dataclass field (unknown keys fail at startup):
+#   run-level keys -> core/base_config.py::RunConfig
+#   agent:         -> core/base_config.py::AgentConfig
+#   dqn:           -> algorithms/dqn.py::DQNConfig
+# Keys left out keep the dataclass defaults.
+#
+# Ablation runs override keys from the CLI, e.g.:
+#   python train.py --config dqn_cartpole --override dqn.target_network_frequency=1 seed=2
+
+algorithm: dqn
+env_id: CartPole-v1
+seed: 1
+cuda: false             # CPU is plenty for this env
+total_timesteps: 500000 # reaches ~500 mean return (the env maximum)
+num_envs: 1
+
+track: true             # log metrics to Weights & Biases (set WANDB_PROJECT in .env)
+capture_video: true     # record a video during the final greedy evaluation
+save_model: true        # write model.pt + run a final greedy evaluation
+checkpoint_every: 0     # dqn does not support checkpoint/resume
+
+agent:
+  activation: ReLU
+  hidden_layers_size: 120
+
+dqn:
+  learning_rate: 2.5e-4
+  buffer_size: 10000
+  gamma: 0.99
+  tau: 1.0
+  target_network_frequency: 500
+  batch_size: 128
+  start_e: 1.0
+  end_e: 0.05
+  exploration_fraction: 0.5
+  learning_starts: 10000
+  train_frequency: 10

@@ -93,12 +93,21 @@ def test_discrete_actions_rejected():
 @pytest.mark.parametrize("stack_name", sorted(WRAPPER_STACKS))
 def test_stack_produces_working_env(stack_name):
     stack = WRAPPER_STACKS[stack_name]
-    env = stack(gym.make("Pendulum-v1"), "Pendulum-v1", 0.99)
+    # Each stack declares an action-space contract; test with a matching env.
+    env_id = "CartPole-v1" if stack_name == "discrete_control" else "Pendulum-v1"
+    env = stack(gym.make(env_id), env_id, 0.99)
     obs, _ = env.reset(seed=0)
     assert obs.shape == env.observation_space.shape
     obs, reward, _, _, _ = env.step(env.action_space.sample())
     assert np.all(np.isfinite(obs)) and np.isfinite(reward)
     env.close()
+
+
+def test_discrete_stack_rejects_continuous_actions():
+    from envs.wrappers import discrete_control_wrappers
+
+    with pytest.raises(TypeError, match="not Discrete"):
+        discrete_control_wrappers(gym.make("Pendulum-v1"), "Pendulum-v1", 0.99)
 
 
 # ---------------------------------------------------------------------------

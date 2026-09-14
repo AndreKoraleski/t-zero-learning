@@ -58,6 +58,24 @@ shared by every algorithm.
 | `use_obs_norm` | `bool` | `False` | opt-in running mean/var observation normalization owned by the agent (stats live in the agent's state_dict). Meant for flat continuous observations; requires algorithm support — the rollout loop must call ``agent.update_norm`` / ``agent.normalize_obs`` (both PPO variants do; see docs/adding-a-new-algorithm.md) |
 | `obs_norm_epsilon` | `float` | `1e-08` | numerical-stability epsilon in the obs normalization denominator (only used when ``use_obs_norm`` is true) |
 
+## `dqn:` section
+
+Defined in `algorithms/dqn.py::DQNConfig`.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `learning_rate` | `float` | `0.00025` | the learning rate of the optimizer |
+| `buffer_size` | `int` | `10000` | the replay memory buffer size |
+| `gamma` | `float` | `0.99` | the discount factor gamma |
+| `tau` | `float` | `1.0` | the target network update rate (1.0 = hard copy) |
+| `target_network_frequency` | `int` | `500` | the timesteps it takes to update the target network |
+| `batch_size` | `int` | `128` | the batch size of samples from the replay memory |
+| `start_e` | `float` | `1.0` | the starting epsilon for exploration |
+| `end_e` | `float` | `0.05` | the ending epsilon for exploration |
+| `exploration_fraction` | `float` | `0.5` | the fraction of `total_timesteps` it takes from start_e to end_e |
+| `learning_starts` | `int` | `10000` | timestep to start learning |
+| `train_frequency` | `int` | `10` | the frequency of training |
+
 ## `ppo_continuous_action:` section
 
 Defined in `algorithms/ppo_continuous_action.py::PPOConfig`.

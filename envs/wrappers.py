@@ -100,12 +100,39 @@ def no_wrappers(env: gym.Env, env_id: str, gamma: float) -> gym.Env:
     return env
 
 
+def discrete_control_wrappers(env: gym.Env, env_id: str, gamma: float) -> gym.Env:
+    """Preprocessing stack for flat-observation discrete-action agents (e.g. DQN).
+
+    Pipeline: FlattenObservation + RecordEpisodeStatistics. No reward
+    transforms — value-based methods bootstrap on raw rewards (*gamma* is
+    unused). Fails loudly on non-Discrete action spaces and image obs.
+    """
+    obs_space = env.observation_space
+    if isinstance(obs_space, gym.spaces.Box) and len(obs_space.shape) >= 2:
+        raise TypeError(
+            f"{env_id}: observation space {obs_space} looks like image data. "
+            "This stack flattens obs to a vector; pixel envs need a CNN agent "
+            "and their own stack — see docs/adding-a-new-environment.md."
+        )
+    if not isinstance(env.action_space, gym.spaces.Discrete):
+        raise TypeError(
+            f"{env_id}: action space {env.action_space} is not Discrete. "
+            "This stack is for value-based discrete-action agents (DQN)."
+        )
+
+    env = gym.wrappers.FlattenObservation(env)
+    if not get_adapter(env_id).skip_episode_stats:
+        env = gym.wrappers.RecordEpisodeStatistics(env)
+    return env
+
+
 # ---------------------------------------------------------------------------
 # Named stacks, selectable per run via the ``env_wrappers:`` config field.
 # New algorithm families register their stack here.
 # ---------------------------------------------------------------------------
 WRAPPER_STACKS = {
     "continuous_control": continuous_control_wrappers,
+    "discrete_control": discrete_control_wrappers,
     "none": no_wrappers,
 }
 
