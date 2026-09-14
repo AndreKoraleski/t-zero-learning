@@ -103,10 +103,7 @@ def _evaluate(
             experiment_dir=algo.experiment_dir,
             run_name=algo.run_name,
             env_kwargs=algo.env_kwargs,
-            activation=args.agent.activation,
-            hidden_layers_size=args.agent.hidden_layers_size,
-            use_obs_norm=args.agent.use_obs_norm,
-            obs_norm_epsilon=args.agent.obs_norm_epsilon,
+            model_kwargs=algo.eval_model_kwargs(),
             deterministic=deterministic,
             wrappers=algo.wrappers,
         )

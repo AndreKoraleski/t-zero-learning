@@ -94,3 +94,13 @@ class ContinuousActorCritic(nn.Module):
         if action is None:
             action = action_mean if deterministic else probs.sample()
         return action, probs.log_prob(action).sum(1), probs.entropy().sum(1), self.critic(x)
+
+    def act(self, x, deterministic: bool = False):
+        """Action selection for evaluation/inference (normalizes obs internally).
+
+        The uniform policy interface used by ``evaluate_checkpoint`` — every
+        agent network exposes ``act`` regardless of family (actor-critic,
+        Q-network, ...).
+        """
+        action, _, _, _ = self.get_action_and_value(x, deterministic=deterministic)
+        return action

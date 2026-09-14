@@ -45,10 +45,7 @@ def evaluate_checkpoint(
     experiment_dir: str | None = None,
     run_name: str = "eval",
     env_kwargs: dict | None = None,
-    activation: str = "Tanh",
-    hidden_layers_size: int = 64,
-    use_obs_norm: bool = False,
-    obs_norm_epsilon: float = 1e-8,
+    model_kwargs: dict | None = None,
     deterministic: bool = False,
     wrappers=None,
 ) -> dict:
@@ -56,8 +53,11 @@ def evaluate_checkpoint(
 
     *wrappers* is the preprocessing stack the model was trained with (see
     :func:`envs.make_env`); required unless the env has an adapter override.
-    *use_obs_norm* must match training — the frozen normalization statistics
-    are restored from the model's state_dict and never updated here.
+    *model_kwargs* are the constructor kwargs to rebuild the agent
+    (``Model(envs, **model_kwargs)``) and must match training — e.g. for
+    actor-critic agents, ``use_obs_norm`` restores frozen normalization
+    statistics from the state_dict, never updated here.  The model must
+    expose ``act(obs, deterministic=...)`` (the uniform policy interface).
 
     Returns a dict with ``episodic_returns`` (list[float]) and ``metrics``
     (dict suitable for wandb logging).
@@ -73,10 +73,7 @@ def evaluate_checkpoint(
             )
         ]
     )
-    agent = Model(
-        envs, activation=activation, hidden_layers_size=hidden_layers_size,
-        use_obs_norm=use_obs_norm, obs_norm_epsilon=obs_norm_epsilon,
-    ).to(device)
+    agent = Model(envs, **(model_kwargs or {})).to(device)
     agent.load_state_dict(
         torch.load(model_path, map_location=device, weights_only=True)
     )
@@ -87,11 +84,7 @@ def evaluate_checkpoint(
     while len(episodic_returns) < eval_episodes:
         obs_t = torch.as_tensor(obs, dtype=torch.float32, device=device)
         with torch.no_grad():
-            # get_action_and_value normalizes internally (frozen stats —
-            # update_norm is never called during evaluation).
-            actions, _, _, _ = agent.get_action_and_value(
-                obs_t, deterministic=deterministic
-            )
+            actions = agent.act(obs_t, deterministic=deterministic)
         next_obs, _, _, _, infos = envs.step(actions.cpu().numpy())
         if "_episode" in infos:
             for i, done in enumerate(infos["_episode"]):
@@ -279,6 +272,21 @@ class Algorithm(ABC):
     # Evaluation — override for env-specific protocols
     # ------------------------------------------------------------------
 
+    def eval_model_kwargs(self) -> dict:
+        """Constructor kwargs to rebuild the agent for evaluation.
+
+        Must match how the agent was built in ``initialize()``.  The default
+        covers the actor-critic family; algorithms whose network takes a
+        different constructor signature override this.
+        """
+        args = self.args
+        return dict(
+            activation=args.agent.activation,
+            hidden_layers_size=args.agent.hidden_layers_size,
+            use_obs_norm=args.agent.use_obs_norm,
+            obs_norm_epsilon=args.agent.obs_norm_epsilon,
+        )
+
     def evaluate(self, model_path, eval_episodes=10, deterministic=False):
         """Evaluate a saved model.
 
@@ -303,10 +311,7 @@ class Algorithm(ABC):
             experiment_dir=self.experiment_dir,
             run_name=self.run_name,
             env_kwargs=self.env_kwargs,
-            activation=args.agent.activation,
-            hidden_layers_size=args.agent.hidden_layers_size,
-            use_obs_norm=args.agent.use_obs_norm,
-            obs_norm_epsilon=args.agent.obs_norm_epsilon,
+            model_kwargs=self.eval_model_kwargs(),
             deterministic=deterministic,
             wrappers=self.wrappers,
         )

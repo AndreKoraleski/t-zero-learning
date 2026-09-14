@@ -79,12 +79,14 @@ def parse_run_config(cfg: dict) -> dict | None:
     return {
         "env_id": env_id,
         "env_kwargs": env_kwargs,
-        "activation": agent.get("activation", cfg.get("activation", "Tanh")),
-        "hidden_layers_size": int(
-            agent.get("hidden_layers_size", cfg.get("hidden_layers_size", 64))
-        ),
-        "use_obs_norm": bool(agent.get("use_obs_norm", False)),
-        "obs_norm_epsilon": float(agent.get("obs_norm_epsilon", 1e-8)),
+        "model_kwargs": {
+            "activation": agent.get("activation", cfg.get("activation", "Tanh")),
+            "hidden_layers_size": int(
+                agent.get("hidden_layers_size", cfg.get("hidden_layers_size", 64))
+            ),
+            "use_obs_norm": bool(agent.get("use_obs_norm", False)),
+            "obs_norm_epsilon": float(agent.get("obs_norm_epsilon", 1e-8)),
+        },
         "gamma": float(algo.get("gamma", cfg.get("gamma", 0.99))),
         "wrappers": resolve_wrapper_stack(
             cfg.get("env_wrappers", ""), continuous_control_wrappers
@@ -164,10 +166,7 @@ def main() -> None:
             experiment_dir=str(run_dir.parent),
             run_name=run_dir.name,
             env_kwargs=env_kwargs,
-            activation=run_cfg["activation"],
-            hidden_layers_size=run_cfg["hidden_layers_size"],
-            use_obs_norm=run_cfg["use_obs_norm"],
-            obs_norm_epsilon=run_cfg["obs_norm_epsilon"],
+            model_kwargs=run_cfg["model_kwargs"],
             deterministic=bool(args.deterministic),
             wrappers=run_cfg["wrappers"],
         )
