@@ -75,26 +75,45 @@ def test_buffer_fifo_overwrite_when_full():
 # ------------------------------------------------------------- Part 2: TD target
 
 
+def _stub_q(obs):
+    """Deterministic 2-action 'target network': Q(s) = [s0, -s0] → max = |s0|."""
+    return torch.stack([obs[:, 0], -obs[:, 0]], dim=1)
+
+
+def make_batch(next_obs_vals, rewards, dones):
+    n = len(rewards)
+    next_obs = torch.zeros(n, OBS_DIM)
+    next_obs[:, 0] = torch.tensor(next_obs_vals)
+    return dqn.Batch(
+        observations=torch.zeros(n, OBS_DIM),
+        actions=torch.zeros(n, 1, dtype=torch.int64),
+        next_observations=next_obs,
+        rewards=torch.tensor(rewards).reshape(n, 1),
+        dones=torch.tensor(dones).reshape(n, 1),
+    )
+
+
 def test_td_target_terminal_equals_reward():
-    rewards = torch.tensor([1.0, -2.0, 5.0])
-    dones = torch.ones(3)
-    next_q_max = torch.tensor([10.0, 20.0, 30.0])  # must be ignored
-    targets = dqn.compute_td_targets(rewards, dones, next_q_max, gamma=0.99)
-    assert torch.allclose(targets, rewards)
+    batch = make_batch(next_obs_vals=[10.0, 20.0, 30.0], rewards=[1.0, -2.0, 5.0], dones=[1.0, 1.0, 1.0])
+    targets = dqn.compute_td_targets(_stub_q, batch, gamma=0.99)
+    assert targets.shape == (3,)
+    assert torch.allclose(targets, torch.tensor([1.0, -2.0, 5.0]))
 
 
-def test_td_target_nonterminal_bootstraps():
-    rewards = torch.tensor([1.0, 0.0])
-    dones = torch.zeros(2)
-    next_q_max = torch.tensor([2.0, -4.0])
-    targets = dqn.compute_td_targets(rewards, dones, next_q_max, gamma=0.5)
-    assert torch.allclose(targets, torch.tensor([1.0 + 0.5 * 2.0, 0.5 * -4.0]))
+def test_td_target_nonterminal_bootstraps_on_best_action():
+    # max_a Q = |s0|: picking any fixed action instead of the max gives wrong values
+    batch = make_batch(next_obs_vals=[2.0, -4.0], rewards=[1.0, 0.0], dones=[0.0, 0.0])
+    targets = dqn.compute_td_targets(_stub_q, batch, gamma=0.5)
+    assert torch.allclose(targets, torch.tensor([1.0 + 0.5 * 2.0, 0.5 * 4.0]))
 
 
-def test_td_target_mixed_batch():
-    rewards = torch.tensor([1.0, 1.0, 1.0, 1.0])
-    dones = torch.tensor([0.0, 1.0, 0.0, 1.0])
-    next_q_max = torch.tensor([10.0, 10.0, -10.0, -10.0])
-    targets = dqn.compute_td_targets(rewards, dones, next_q_max, gamma=0.9)
+def test_td_target_mixed_batch_shape_and_values():
+    # shape must be (B,): unflattened (B,1) rewards/dones broadcast into (B,B)
+    batch = make_batch(
+        next_obs_vals=[10.0, 10.0, -10.0, -10.0],
+        rewards=[1.0, 1.0, 1.0, 1.0],
+        dones=[0.0, 1.0, 0.0, 1.0],
+    )
+    targets = dqn.compute_td_targets(_stub_q, batch, gamma=0.9)
     assert targets.shape == (4,)
-    assert torch.allclose(targets, torch.tensor([10.0, 1.0, -8.0, 1.0]))
+    assert torch.allclose(targets, torch.tensor([10.0, 1.0, 10.0, 1.0]))

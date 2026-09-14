@@ -121,9 +121,6 @@ class ReplayBuffer:
     def add(self, obs, next_obs, action: int, reward: float, done: float):
         """Store one transition, overwriting the oldest one when full.
 
-        Hint: write into index ``self.pos`` of each storage array, then update
-        ``self.pos`` (it must wrap around at ``self.capacity``) and ``self.size``
-        (it must never exceed ``self.capacity``).
         """
         # ==================== YOUR CODE HERE (Part 1a) ====================
         raise NotImplementedError("Implement ReplayBuffer.add")
@@ -136,26 +133,15 @@ class ReplayBuffer:
         observations (B, *obs_shape), actions (B, 1) int64,
         next_observations (B, *obs_shape), rewards (B, 1), dones (B, 1).
 
-        Hint: draw random indices in ``[0, self.size)`` (with replacement is fine),
-        index the storage arrays, and convert with
-        ``torch.as_tensor(array).to(self.device)``.
         """
         # ==================== YOUR CODE HERE (Part 1b) ====================
         raise NotImplementedError("Implement ReplayBuffer.sample")
         # ==================================================================
 
 
-def compute_td_targets(
-    rewards: torch.Tensor, dones: torch.Tensor, next_q_max: torch.Tensor, gamma: float
-) -> torch.Tensor:
+def compute_td_targets(target_network, batch: Batch, gamma: float) -> torch.Tensor:
     """Compute the one-step TD target for a batch of transitions.
 
-    y = r + gamma * max_a' Q_target(s', a')     if s' is NOT terminal
-    y = r                                       if s' IS terminal
-
-    All three tensor arguments have shape (batch,). ``dones`` is 1.0 for
-    transitions whose next state is terminal, 0.0 otherwise. Must return a
-    (batch,) tensor. Think about WHY the terminal case must not bootstrap.
     """
     # ===================== YOUR CODE HERE (Part 2) =====================
     raise NotImplementedError("Implement compute_td_targets")
@@ -311,10 +297,7 @@ class DQN(Algorithm):
                 if global_step > cfg.learning_starts and global_step % cfg.train_frequency == 0:
                     data = self.rb.sample(cfg.batch_size)
                     with torch.no_grad():
-                        next_q_max, _ = self.target_network(data.next_observations).max(dim=1)
-                        td_target = compute_td_targets(
-                            data.rewards.flatten(), data.dones.flatten(), next_q_max, cfg.gamma
-                        )
+                        td_target = compute_td_targets(self.target_network, data, cfg.gamma)
                     old_val = self.q_network(data.observations).gather(1, data.actions).squeeze()
                     loss = F.mse_loss(td_target, old_val)
 
