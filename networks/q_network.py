@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 import torch.nn as nn
 
 
@@ -25,3 +26,11 @@ class QNetwork(nn.Module):
 
     def forward(self, x):
         return self.network(x)
+
+    def act(self, x, deterministic: bool = True):
+        """Greedy action selection (uniform eval policy interface).
+
+        The greedy policy is inherently deterministic; the flag is accepted
+        for interface compatibility and ignored.
+        """
+        return torch.argmax(self.network(x), dim=1)

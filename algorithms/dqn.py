@@ -368,56 +368,15 @@ class DQN(Algorithm):
         wandb.log(metrics_dict, step=self.global_step)
 
     # ------------------------------------------------------------------
-    # Evaluation — greedy Q-policy rollout (the framework's default eval
-    # assumes the actor-critic interface, so DQN brings its own)
+    # Evaluation — the framework loop rebuilds the agent from these kwargs
+    # and drives it through QNetwork.act (greedy policy)
     # ------------------------------------------------------------------
 
-    def evaluate(self, model_path, eval_episodes=10, deterministic=True):
-        """Evaluate a saved Q-network with the greedy policy.
-
-        Records video into the run's ``videos/`` folder when
-        ``capture_video`` is enabled. The greedy policy is deterministic, so
-        the *deterministic* flag is accepted for interface compatibility but
-        has no effect.
-        """
-        from envs import make_env
-
-        args = self.args
-        envs = gym.vector.SyncVectorEnv(
-            [
-                make_env(
-                    self.env_id, 0, args.capture_video, self.run_name,
-                    args.algo.gamma, self.experiment_dir, self.env_kwargs,
-                    name_prefix="eval", wrappers=self.wrappers,
-                )
-            ]
+    def eval_model_kwargs(self) -> dict:
+        return dict(
+            activation=self.args.agent.activation,
+            hidden_layers_size=self.args.agent.hidden_layers_size,
         )
-        model = QNetwork(envs, args.agent.activation, args.agent.hidden_layers_size).to(self.device)
-        model.load_state_dict(torch.load(model_path, map_location=self.device, weights_only=True))
-        model.eval()
-
-        obs, _ = envs.reset(seed=args.seed)
-        episodic_returns: list[float] = []
-        while len(episodic_returns) < eval_episodes:
-            with torch.no_grad():
-                q_values = model(torch.as_tensor(obs, dtype=torch.float32, device=self.device))
-            actions = torch.argmax(q_values, dim=1).cpu().numpy()
-            obs, _, _, _, infos = envs.step(actions)
-            if "_episode" in infos:
-                for i, done in enumerate(infos["_episode"]):
-                    if done:
-                        ret = float(infos["episode"]["r"][i])
-                        print(f"eval_episode={len(episodic_returns)}, episodic_return={ret}")
-                        episodic_returns.append(ret)
-        envs.close()
-
-        return {
-            "episodic_returns": episodic_returns,
-            "metrics": {
-                "eval/mean_return": float(np.mean(episodic_returns)),
-                "eval/std_return": float(np.std(episodic_returns)),
-            },
-        }
 
     # ------------------------------------------------------------------
     # Checkpoint contract — not supported (replay buffer is not persisted)
