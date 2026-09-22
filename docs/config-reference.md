@@ -58,6 +58,20 @@ shared by every algorithm.
 | `use_obs_norm` | `bool` | `False` | opt-in running mean/var observation normalization owned by the agent (stats live in the agent's state_dict). Meant for flat continuous observations; requires algorithm support — the rollout loop must call ``agent.update_norm`` / ``agent.normalize_obs`` (both PPO variants do; see docs/adding-a-new-algorithm.md) |
 | `obs_norm_epsilon` | `float` | `1e-08` | numerical-stability epsilon in the obs normalization denominator (only used when ``use_obs_norm`` is true) |
 
+## `a2c:` section
+
+Defined in `algorithms/a2c.py::A2CConfig`.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `learning_rate` | `float` | `0.0007` | the learning rate of the optimizer |
+| `num_steps` | `int` | `5` | steps per environment per update (the n of the n-step return; A3C's t_max) |
+| `gamma` | `float` | `0.99` | the discount factor gamma |
+| `vf_coef` | `float` | `0.5` | coefficient of the value loss |
+| `ent_coef` | `float` | `0.01` | coefficient of the entropy bonus |
+| `max_grad_norm` | `float` | `0.5` | the maximum norm for the gradient clipping |
+| `use_baseline` | `bool` | `True` | subtract V(s) from the n-step return in the policy gradient (False = REINFORCE-style weights) |
+
 ## `dqn:` section
 
 Defined in `algorithms/dqn.py::DQNConfig`.
