@@ -24,16 +24,16 @@ import gymnasium as gym
 import numpy as np
 import torch
 import torch.nn.functional as F
-import torch.optim as optim
+from torch import optim
 from tqdm.auto import tqdm
 
 import envs.custom_envs  # noqa: F401 — Gym registration side effects
-from envs.custom_envs.envs_utils import episode_completions_from_vector_infos
+from algorithms.base import Algorithm
+from core.base_config import AgentConfig, RunConfig
 from envs import build_vector_envs, resolve_training_video_schedule
+from envs.custom_envs.envs_utils import episode_completions_from_vector_infos
 from envs.wrappers import discrete_control_wrappers
 from networks import QNetwork
-from core.base_config import AgentConfig, RunConfig
-from algorithms.base import Algorithm
 
 
 @dataclass
@@ -123,7 +123,18 @@ class ReplayBuffer:
 
         """
         # ==================== YOUR CODE HERE (Part 1a) ====================
-        raise NotImplementedError("Implement ReplayBuffer.add")
+
+        i = self.pos
+
+        self.observations[i] = obs
+        self.next_observations[i] = next_obs
+        self.actions[i] = action
+        self.rewards[i] = reward
+        self.dones[i] = done
+
+        self.size = min(self.size + 1, self.capacity)
+        self.pos = (self.pos + 1) % self.capacity
+
         # ==================================================================
 
     def sample(self, batch_size: int) -> Batch:
@@ -135,7 +146,17 @@ class ReplayBuffer:
 
         """
         # ==================== YOUR CODE HERE (Part 1b) ====================
-        raise NotImplementedError("Implement ReplayBuffer.sample")
+        
+        indices = np.random.choice(self.size, size=batch_size, replace=True)
+
+        observations = torch.as_tensor(self.observations[indices], device=self.device)
+        actions = torch.as_tensor(self.actions[indices], dtype=torch.int64, device=self.device)
+        next_observations = torch.as_tensor(self.next_observations[indices], device=self.device)
+        rewards = torch.as_tensor(self.rewards[indices], device=self.device)
+        dones = torch.as_tensor(self.dones[indices], device=self.device)
+
+        return Batch(observations=observations, actions=actions, next_observations=next_observations, rewards=rewards, dones=dones)
+
         # ==================================================================
 
 
@@ -144,7 +165,14 @@ def compute_td_targets(target_network, batch: Batch, gamma: float) -> torch.Tens
 
     """
     # ===================== YOUR CODE HERE (Part 2) =====================
-    raise NotImplementedError("Implement compute_td_targets")
+    next_q_values = target_network(batch.next_observations).max(dim=1).values
+
+    td_targets = (
+        batch.rewards.squeeze(1)
+        + gamma * (1 - batch.dones.squeeze(1)) * next_q_values
+    )
+
+    return td_targets
     # ===================================================================
 
 
@@ -356,10 +384,10 @@ class DQN(Algorithm):
     # ------------------------------------------------------------------
 
     def eval_model_kwargs(self) -> dict:
-        return dict(
-            activation=self.args.agent.activation,
-            hidden_layers_size=self.args.agent.hidden_layers_size,
-        )
+        return {
+            "activation": self.args.agent.activation,
+            "hidden_layers_size": self.args.agent.hidden_layers_size,
+        }
 
     # ------------------------------------------------------------------
     # Checkpoint contract — not supported (replay buffer is not persisted)
