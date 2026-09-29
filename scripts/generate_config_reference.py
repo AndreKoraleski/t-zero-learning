@@ -12,6 +12,7 @@ Usage (from the repo root)::
     python scripts/generate_config_reference.py          # write the file
     python scripts/generate_config_reference.py --check  # exit 1 if stale
 """
+
 from __future__ import annotations
 
 import argparse
@@ -67,7 +68,9 @@ def annotation_source(cls: type, name: str) -> str:
     return "?"
 
 
-def render_table(cls: type, *, skip: set[str] = frozenset(), only: set[str] | None = None) -> str:
+def render_table(
+    cls: type, *, skip: set[str] = frozenset(), only: set[str] | None = None
+) -> str:
     docs = field_docstrings(cls)
     instance = cls()
     lines = ["| Key | Type | Default | Description |", "|---|---|---|---|"]
@@ -135,9 +138,7 @@ def generate() -> str:
         ]
         # Anything an Args adds beyond RunConfig + agent + its own section
         # would otherwise be silently undocumented — refuse instead.
-        extra = {
-            f.name for f in fields(ArgsClass)
-        } - run_level - {"agent", algo_name}
+        extra = {f.name for f in fields(ArgsClass)} - run_level - {"agent", algo_name}
         if extra:
             raise SystemExit(
                 f"{ArgsClass.__module__}.Args has undocumented top-level "

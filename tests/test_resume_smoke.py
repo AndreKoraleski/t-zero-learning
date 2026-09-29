@@ -7,6 +7,7 @@ resumes it from the saved config + checkpoint (the same flow
 The cross-variant guard test is intentionally specific to the two PPO
 variants — it pins their friendly refuse-to-resume error.
 """
+
 from __future__ import annotations
 
 import pytest

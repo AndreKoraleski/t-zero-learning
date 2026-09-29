@@ -17,6 +17,7 @@ This matches the multi-task Meta-World setup of rainx0r/metaworld-algorithms
 line-for-line identical to the canonical file — fixes to the shared parts
 should be mirrored there.
 """
+
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -46,6 +47,7 @@ from algorithms.base import Algorithm
 @dataclass
 class PPOConfig:
     """PPO algorithm hyperparameters for continuous actions (split optimizers)."""
+
     learning_rate: float = 3e-4
     """the learning rate of both optimizers"""
     num_steps: int = 2048
@@ -84,6 +86,7 @@ class Args(RunConfig):
     :class:`AgentConfig` (network architecture) and :class:`PPOConfig`
     (algorithm hyperparameters).
     """
+
     algorithm: str = "ppo_continuous_action_split_optim"
 
     # Nested configs
@@ -156,7 +159,9 @@ class PPO(Algorithm):
 
         self._setup_logging_and_checkpoints()
 
-        assert isinstance(self.envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
+        assert isinstance(self.envs.single_action_space, gym.spaces.Box), (
+            "only continuous action space is supported"
+        )
 
         self.agent = ContinuousActorCritic(
             self.envs,
@@ -167,19 +172,32 @@ class PPO(Algorithm):
         ).to(self.device)
         # Split optimizers: actor (mean network + log_std) and critic each get
         # their own Adam, so gradient clipping is applied per network.
-        self.actor_params = list(self.agent.actor_mean.parameters()) + [self.agent.actor_logstd]
+        self.actor_params = list(self.agent.actor_mean.parameters()) + [
+            self.agent.actor_logstd
+        ]
         self.critic_params = list(self.agent.critic.parameters())
-        self.actor_optimizer = optim.Adam(self.actor_params, lr=args.algo.learning_rate, eps=1e-5)
-        self.critic_optimizer = optim.Adam(self.critic_params, lr=args.algo.learning_rate, eps=1e-5)
+        self.actor_optimizer = optim.Adam(
+            self.actor_params, lr=args.algo.learning_rate, eps=1e-5
+        )
+        self.critic_optimizer = optim.Adam(
+            self.critic_params, lr=args.algo.learning_rate, eps=1e-5
+        )
 
         self.last_iteration_resume = 0
         if self.resuming:
             self._resume_from_checkpoint()
 
         # ALGO Logic: Storage setup
-        self.obs = torch.zeros((args.algo.num_steps, args.num_envs) + self.envs.single_observation_space.shape).to(self.device)
-        self.actions = torch.zeros((args.algo.num_steps, args.num_envs) + self.envs.single_action_space.shape).to(self.device)
-        self.logprobs = torch.zeros((args.algo.num_steps, args.num_envs)).to(self.device)
+        self.obs = torch.zeros(
+            (args.algo.num_steps, args.num_envs)
+            + self.envs.single_observation_space.shape
+        ).to(self.device)
+        self.actions = torch.zeros(
+            (args.algo.num_steps, args.num_envs) + self.envs.single_action_space.shape
+        ).to(self.device)
+        self.logprobs = torch.zeros((args.algo.num_steps, args.num_envs)).to(
+            self.device
+        )
         self.rewards = torch.zeros((args.algo.num_steps, args.num_envs)).to(self.device)
         self.dones = torch.zeros((args.algo.num_steps, args.num_envs)).to(self.device)
         self.values = torch.zeros((args.algo.num_steps, args.num_envs)).to(self.device)
@@ -224,9 +242,15 @@ class PPO(Algorithm):
             envs.close()
             return
 
-        with tqdm(range(iter_start, args.num_iterations + 1), desc="PPO iterations", unit="iter") as pbar:
+        with tqdm(
+            range(iter_start, args.num_iterations + 1),
+            desc="PPO iterations",
+            unit="iter",
+        ) as pbar:
             for iteration in pbar:
-                self.iteration = iteration  # persisted in checkpoints as `last_iteration`
+                self.iteration = (
+                    iteration  # persisted in checkpoints as `last_iteration`
+                )
 
                 # Annealing the rate if instructed to do so.
                 if cfg.anneal_lr:
@@ -251,20 +275,26 @@ class PPO(Algorithm):
 
                     # ALGO LOGIC: action logic
                     with torch.no_grad():
-                        action, logprob, _, value = agent.get_action_and_value(obs_input, input_is_normalized=True)
+                        action, logprob, _, value = agent.get_action_and_value(
+                            obs_input, input_is_normalized=True
+                        )
                         self.values[step] = value.flatten()
                     self.actions[step] = action
                     self.logprobs[step] = logprob
 
                     # Execute the game and log data (unchanged from CleanRL).
-                    next_obs, reward, terminations, truncations, infos = envs.step(action.cpu().numpy())
+                    next_obs, reward, terminations, truncations, infos = envs.step(
+                        action.cpu().numpy()
+                    )
                     next_done = np.logical_or(terminations, truncations)
                     self.rewards[step] = torch.tensor(reward).to(device).view(-1)
                     self.next_obs = torch.Tensor(next_obs).to(device)
                     self.next_done = torch.Tensor(next_done).to(device)
 
                     completed_returns, completed_lengths, completed_successes = (
-                        episode_completions_from_vector_infos(terminations, truncations, infos)
+                        episode_completions_from_vector_infos(
+                            terminations, truncations, infos
+                        )
                     )
                     if completed_returns:
                         self.recent_ep_returns.extend(completed_returns)
@@ -287,8 +317,15 @@ class PPO(Algorithm):
                         else:
                             nextnonterminal = 1.0 - self.dones[t + 1]
                             nextvalues = self.values[t + 1]
-                        delta = self.rewards[t] + cfg.gamma * nextvalues * nextnonterminal - self.values[t]
-                        advantages[t] = lastgaelam = delta + cfg.gamma * cfg.gae_lambda * nextnonterminal * lastgaelam
+                        delta = (
+                            self.rewards[t]
+                            + cfg.gamma * nextvalues * nextnonterminal
+                            - self.values[t]
+                        )
+                        advantages[t] = lastgaelam = (
+                            delta
+                            + cfg.gamma * cfg.gae_lambda * nextnonterminal * lastgaelam
+                        )
                     returns = advantages + self.values
 
                 # flatten the batch
@@ -320,15 +357,24 @@ class PPO(Algorithm):
                             # calculate approx_kl http://joschu.net/blog/kl-approx.html
                             old_approx_kl = (-logratio).mean()
                             approx_kl = ((ratio - 1) - logratio).mean()
-                            clipfracs += [((ratio - 1.0).abs() > cfg.clip_coef).float().mean().item()]
+                            clipfracs += [
+                                ((ratio - 1.0).abs() > cfg.clip_coef)
+                                .float()
+                                .mean()
+                                .item()
+                            ]
 
                         mb_advantages = b_advantages[mb_inds]
                         if cfg.norm_adv:
-                            mb_advantages = (mb_advantages - mb_advantages.mean()) / (mb_advantages.std() + 1e-8)
+                            mb_advantages = (mb_advantages - mb_advantages.mean()) / (
+                                mb_advantages.std() + 1e-8
+                            )
 
                         # Policy loss
                         pg_loss1 = -mb_advantages * ratio
-                        pg_loss2 = -mb_advantages * torch.clamp(ratio, 1 - cfg.clip_coef, 1 + cfg.clip_coef)
+                        pg_loss2 = -mb_advantages * torch.clamp(
+                            ratio, 1 - cfg.clip_coef, 1 + cfg.clip_coef
+                        )
                         pg_loss = torch.max(pg_loss1, pg_loss2).mean()
 
                         # Value loss
@@ -354,14 +400,18 @@ class PPO(Algorithm):
                         actor_loss = pg_loss - cfg.ent_coef * entropy_loss
                         self.actor_optimizer.zero_grad()
                         actor_loss.backward()
-                        gn_a = nn.utils.clip_grad_norm_(self.actor_params, cfg.max_grad_norm)
+                        gn_a = nn.utils.clip_grad_norm_(
+                            self.actor_params, cfg.max_grad_norm
+                        )
                         grad_norms_actor.append(float(gn_a.detach().item()))
                         self.actor_optimizer.step()
 
                         critic_loss = cfg.vf_coef * v_loss
                         self.critic_optimizer.zero_grad()
                         critic_loss.backward()
-                        gn_c = nn.utils.clip_grad_norm_(self.critic_params, cfg.max_grad_norm)
+                        gn_c = nn.utils.clip_grad_norm_(
+                            self.critic_params, cfg.max_grad_norm
+                        )
                         grad_norms_critic.append(float(gn_c.detach().item()))
                         self.critic_optimizer.step()
 
@@ -385,12 +435,17 @@ class PPO(Algorithm):
                     rollout_ep_successes=rollout_ep_successes,
                 )
 
-                if self.checkpoint_every > 0 and self.global_step >= self.next_checkpoint_step:
+                if (
+                    self.checkpoint_every > 0
+                    and self.global_step >= self.next_checkpoint_step
+                ):
                     while self.next_checkpoint_step <= self.global_step:
                         self.next_checkpoint_step += self.checkpoint_every
                     save_checkpoint(
-                        self.run_dir, self.global_step,
-                        self.checkpoint_state_dict(), self.checkpoints_keep,
+                        self.run_dir,
+                        self.global_step,
+                        self.checkpoint_state_dict(),
+                        self.checkpoints_keep,
                     )
 
         self._post_training_eval()
@@ -459,8 +514,12 @@ class PPO(Algorithm):
             "charts/SPS": sps,
             "global_step": self.global_step,
         }
-        metrics_dict["charts/learning_rate"] = self.actor_optimizer.param_groups[0]["lr"]
-        metrics_dict["charts/critic_learning_rate"] = self.critic_optimizer.param_groups[0]["lr"]
+        metrics_dict["charts/learning_rate"] = self.actor_optimizer.param_groups[0][
+            "lr"
+        ]
+        metrics_dict["charts/critic_learning_rate"] = (
+            self.critic_optimizer.param_groups[0]["lr"]
+        )
         metrics_dict["losses/grad_norm_actor"] = (
             float(np.mean(grad_norms_actor)) if len(grad_norms_actor) else 0.0
         )
@@ -475,22 +534,34 @@ class PPO(Algorithm):
         if len(self.recent_ep_returns) > 0:
             metrics_dict.update(
                 {
-                    "charts/episodic_return_mean_last100": float(np.mean(self.recent_ep_returns)),
-                    "charts/episodic_length_mean_last100": float(np.mean(self.recent_ep_lengths)) if len(self.recent_ep_lengths) > 0 else 0.0,
+                    "charts/episodic_return_mean_last100": float(
+                        np.mean(self.recent_ep_returns)
+                    ),
+                    "charts/episodic_length_mean_last100": float(
+                        np.mean(self.recent_ep_lengths)
+                    )
+                    if len(self.recent_ep_lengths) > 0
+                    else 0.0,
                     "charts/num_episodes": self.global_ep_counter,
                 }
             )
         if rollout_ep_returns:
-            metrics_dict["rollout/mean_episode_return"] = float(np.mean(rollout_ep_returns))
+            metrics_dict["rollout/mean_episode_return"] = float(
+                np.mean(rollout_ep_returns)
+            )
             metrics_dict["rollout/episodes_completed"] = int(len(rollout_ep_returns))
         if rollout_ep_successes:
-            metrics_dict["rollout/mean_success_rate"] = float(np.mean(rollout_ep_successes))
+            metrics_dict["rollout/mean_success_rate"] = float(
+                np.mean(rollout_ep_successes)
+            )
 
         # Special logging (e.g., weight histograms) every X global steps.
         # Use a threshold (not modulo) because global_step increments by num_envs.
         if self.global_step >= self.next_special_log_step:
             for name, param in self.agent.named_parameters():
-                metrics_dict[f"weights/{name}"] = wandb.Histogram(param.detach().clone().cpu().numpy())
+                metrics_dict[f"weights/{name}"] = wandb.Histogram(
+                    param.detach().clone().cpu().numpy()
+                )
             # Advance schedule; keep incrementing in case we skipped over multiple thresholds.
             while self.next_special_log_step <= self.global_step:
                 self.next_special_log_step += self.special_log_every

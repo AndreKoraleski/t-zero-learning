@@ -5,6 +5,7 @@ The algorithm's dataclass field name equals the YAML section name
 ``asdict``) and hand-written configs are the same dialect — these tests keep
 the round-trip lossless. Unknown keys in a config are hard errors.
 """
+
 from __future__ import annotations
 
 from dataclasses import asdict

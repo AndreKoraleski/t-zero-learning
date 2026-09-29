@@ -39,7 +39,9 @@ class TargetDirRewardWrapper(gym.Wrapper):
         return norm_v * np.dot(v_normalized, u_normalized)
 
     def _get_rew(self, info):
-        reward_forward = self._get_forward_reward(info["x_velocity"], info["y_velocity"])
+        reward_forward = self._get_forward_reward(
+            info["x_velocity"], info["y_velocity"]
+        )
         reward_ctrl = info["reward_ctrl"]
         reward_contact = info["reward_contact"]
         reward_survive = info["reward_survive"]

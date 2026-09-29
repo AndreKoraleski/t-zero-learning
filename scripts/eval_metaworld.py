@@ -11,6 +11,7 @@ Usage from repo root::
 
   PYTHONNOUSERSITE=1 MUJOCO_GL=egl python scripts/eval_metaworld.py runs/ppo_metaworld_mt10/.../run_name --deterministic
 """
+
 from __future__ import annotations
 
 import argparse
@@ -31,6 +32,7 @@ if str(_ROOT) not in sys.path:
 
 # Ensure custom envs + metaworld registrations
 import envs.custom_envs  # noqa: F401
+
 try:
     import metaworld  # noqa: F401
     from metaworld import env_dict as _mw
@@ -117,6 +119,7 @@ def _raw_mt1_thunk(
     clipping, etc.) so the observation distribution matches training on
     ``gym.make_vec("Meta-World/MT10", ...)``.
     """
+
     def thunk():
         kw = dict(env_kwargs)
         if capture_video:
@@ -189,9 +192,7 @@ def _eval_one_task(
     deterministic: bool,
 ) -> tuple[list[float], list[float]]:
     safe = env_name.replace("/", "-")
-    env_kwargs = _mt1_env_kwargs(
-        task_json, env_name, task_index, num_tasks, seed=seed
-    )
+    env_kwargs = _mt1_env_kwargs(task_json, env_name, task_index, num_tasks, seed=seed)
     envs = gym.vector.SyncVectorEnv(
         [
             _raw_mt1_thunk(
@@ -205,14 +206,15 @@ def _eval_one_task(
     )
     try:
         agent = ContinuousActorCritic(
-            envs, activation=activation, hidden_layers_size=hidden_layers_size,
-            use_obs_norm=use_obs_norm, obs_norm_epsilon=obs_norm_epsilon,
+            envs,
+            activation=activation,
+            hidden_layers_size=hidden_layers_size,
+            use_obs_norm=use_obs_norm,
+            obs_norm_epsilon=obs_norm_epsilon,
         ).to(device)
         agent.load_state_dict(torch.load(model_path, map_location=device))
         agent.eval()
-        return _run_eval_episodes(
-            envs, agent, device, eval_episodes, deterministic
-        )
+        return _run_eval_episodes(envs, agent, device, eval_episodes, deterministic)
     finally:
         envs.close()
 
@@ -304,7 +306,9 @@ def evaluate_metaworld(
         "per_task_success": per_task_success,
         "per_task_all_returns": per_task_all_returns,
         "mean_return": float(np.mean(all_returns)) if all_returns else float("nan"),
-        "mean_success_rate": float(np.mean(all_successes)) if all_successes else float("nan"),
+        "mean_success_rate": float(np.mean(all_successes))
+        if all_successes
+        else float("nan"),
     }
 
     if save_json:

@@ -84,6 +84,7 @@ from core.base_config import AgentConfig, RunConfig
 @dataclass
 class MyAlgoConfig:
     """MyAlgo hyperparameters."""
+
     learning_rate: float = 3e-4
     """the learning rate of the optimizer"""
     gamma: float = 0.99
@@ -146,22 +147,21 @@ from envs import build_vector_envs, continuous_control_wrappers
 
 
 class MyAlgo(Algorithm):
-
     default_wrappers = staticmethod(continuous_control_wrappers)
     """The preprocessing stack your agent's input contract assumes.
     Required — env construction fails loudly if this is None and the
     config doesn't name a stack. See envs/wrappers.py::WRAPPER_STACKS."""
 
     def initialize(self):
-        super().initialize()   # run dir, seeding, device, env_id/env_kwargs
+        super().initialize()  # run dir, seeding, device, env_id/env_kwargs
         args = self.args
 
         # 1. Build envs (self.env_id / self.env_kwargs / self.wrappers are set)
         self.envs, num_envs = build_vector_envs(...)
 
         # 2. Derived sizes, then logging/checkpoint scheduling
-        args.batch_size = ...                 # must exist before the next call
-        self._setup_logging_and_checkpoints() # config.yml, wandb, cadences
+        args.batch_size = ...  # must exist before the next call
+        self._setup_logging_and_checkpoints()  # config.yml, wandb, cadences
 
         # 3. Agent, optimizers, replay/rollout buffers — all on self
         self.agent = ...
@@ -241,6 +241,7 @@ def checkpoint_state_dict(self) -> dict:
         "optimizer_state_dict": self.optimizer.state_dict(),
         # ... every self.* field needed to continue training
     }
+
 
 def load_checkpoint_state_dict(self, state: dict) -> None:
     self.agent.load_state_dict(state["agent_state_dict"])

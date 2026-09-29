@@ -67,6 +67,7 @@ def main():
         latest = latest_checkpoint_path(run_dir)
         print(f"Latest checkpoint: {latest}")
         import torch
+
         print(f"Device: {'CUDA' if args.cuda and torch.cuda.is_available() else 'CPU'}")
         print("=" * 50 + "\n")
         algo_main(args, resume_run_dir=run_dir)
@@ -106,6 +107,7 @@ def main():
     print(f"Seed: {args.seed}")
 
     import torch
+
     print(f"Device: {'CUDA' if args.cuda and torch.cuda.is_available() else 'CPU'}")
     print("=" * 50 + "\n")
 

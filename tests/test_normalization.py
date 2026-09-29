@@ -10,6 +10,7 @@ the properties that matter for training/eval correctness:
 - normalized outputs are clipped to ±10 (CleanRL's post-normalization clip);
 - evaluation-style use (no ``update_norm``) leaves the stats frozen.
 """
+
 from __future__ import annotations
 
 import gymnasium as gym
@@ -27,6 +28,7 @@ def _envs(env_id="Pendulum-v1", n=2):
 # ---------------------------------------------------------------------------
 # ObsNormalizer math
 # ---------------------------------------------------------------------------
+
 
 def test_running_stats_match_numpy():
     torch.manual_seed(0)
@@ -82,6 +84,7 @@ def test_stats_travel_through_state_dict():
 # Agent wiring
 # ---------------------------------------------------------------------------
 
+
 def test_disabled_norm_is_identity_and_keeps_legacy_state_dict():
     envs = _envs()
     agent = ContinuousActorCritic(envs)  # use_obs_norm defaults to False
@@ -107,9 +110,13 @@ def test_enabled_norm_normalizes_inputs():
     y = agent.normalize_obs(x)
     assert y.mean(dim=0).abs().max() < 0.5
     # get_action_and_value on raw vs pre-normalized input must agree.
-    _, _, _, v_raw = agent.get_action_and_value(x, action=torch.zeros(256, envs.single_action_space.shape[0]))
+    _, _, _, v_raw = agent.get_action_and_value(
+        x, action=torch.zeros(256, envs.single_action_space.shape[0])
+    )
     _, _, _, v_norm = agent.get_action_and_value(
-        y, action=torch.zeros(256, envs.single_action_space.shape[0]), input_is_normalized=True
+        y,
+        action=torch.zeros(256, envs.single_action_space.shape[0]),
+        input_is_normalized=True,
     )
     torch.testing.assert_close(v_raw, v_norm)
     envs.close()

@@ -60,9 +60,13 @@ def test_returns_envs_are_independent():
     dones = torch.tensor([[1.0, 0.0], [0.0, 0.0], [0.0, 0.0]])
     next_value = torch.tensor([0.0, 8.0])
     returns = a2c.compute_n_step_returns(rewards, dones, next_value, gamma=0.5)
-    expected = torch.tensor([[1.0, 1.0 + 0.5 * (1.0 + 0.5 * (1.0 + 0.5 * 8.0))],
-                             [1.0 + 0.5 * 1.0, 1.0 + 0.5 * (1.0 + 0.5 * 8.0)],
-                             [1.0, 1.0 + 0.5 * 8.0]])
+    expected = torch.tensor(
+        [
+            [1.0, 1.0 + 0.5 * (1.0 + 0.5 * (1.0 + 0.5 * 8.0))],
+            [1.0 + 0.5 * 1.0, 1.0 + 0.5 * (1.0 + 0.5 * 8.0)],
+            [1.0, 1.0 + 0.5 * 8.0],
+        ]
+    )
     assert torch.allclose(returns, expected)
 
 
@@ -139,8 +143,12 @@ def test_agent_logprob_matches_log_softmax_of_logits():
     x = torch.randn(6, 4)
     given = torch.tensor([0, 1, 2, 0, 1, 2])
     action, logprob, _, _ = agent.get_action_and_value(x, action=given)
-    assert torch.equal(action, given), "when an action is given, it must be returned unchanged"
-    expected = torch.log_softmax(agent.actor(x), dim=1).gather(1, given[:, None]).squeeze(1)
+    assert torch.equal(action, given), (
+        "when an action is given, it must be returned unchanged"
+    )
+    expected = (
+        torch.log_softmax(agent.actor(x), dim=1).gather(1, given[:, None]).squeeze(1)
+    )
     assert torch.allclose(logprob, expected, atol=1e-6)
 
 
@@ -151,7 +159,9 @@ def test_agent_entropy_of_uniform_policy_is_log_n():
         agent.actor[-1].weight.zero_()
         agent.actor[-1].bias.zero_()
     _, _, entropy, _ = agent.get_action_and_value(torch.randn(3, 4))
-    assert torch.allclose(entropy, torch.full((3,), float(torch.log(torch.tensor(4.0)))), atol=1e-6)
+    assert torch.allclose(
+        entropy, torch.full((3,), float(torch.log(torch.tensor(4.0)))), atol=1e-6
+    )
 
 
 def test_agent_deterministic_is_argmax_and_sampling_is_stochastic():
@@ -163,7 +173,9 @@ def test_agent_deterministic_is_argmax_and_sampling_is_stochastic():
     det, _, _, _ = agent.get_action_and_value(x, deterministic=True)
     assert torch.all(det == 2)
     sampled, _, _, _ = agent.get_action_and_value(x)
-    assert len(torch.unique(sampled)) > 1, "sampling must draw from the distribution, not argmax"
+    assert len(torch.unique(sampled)) > 1, (
+        "sampling must draw from the distribution, not argmax"
+    )
 
 
 def test_agent_value_matches_get_value():

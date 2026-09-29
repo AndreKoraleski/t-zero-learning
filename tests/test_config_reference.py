@@ -4,6 +4,7 @@ The reference is generated from the dataclass field docstrings by
 ``scripts/generate_config_reference.py``.  Adding or changing a config field
 without regenerating the doc fails here, with the fix in the message.
 """
+
 from __future__ import annotations
 
 import subprocess

@@ -25,7 +25,11 @@ import yaml
 # ---------------------------------------------------------------------------
 ALGORITHMS: dict[str, tuple[str, str, str]] = {
     "ppo_continuous_action": ("algorithms.ppo_continuous_action", "PPO", "Args"),
-    "ppo_continuous_action_split_optim": ("algorithms.ppo_continuous_action_split_optim", "PPO", "Args"),
+    "ppo_continuous_action_split_optim": (
+        "algorithms.ppo_continuous_action_split_optim",
+        "PPO",
+        "Args",
+    ),
     "dqn": ("algorithms.dqn", "DQN", "Args"),
     "a2c": ("algorithms.a2c", "A2C", "Args"),
 }
@@ -54,6 +58,7 @@ def _fail_unknown_key(what: str, target: Any) -> None:
 # ---------------------------------------------------------------------------
 # Config loading
 # ---------------------------------------------------------------------------
+
 
 def load_config(config_path: str) -> tuple[Any, str]:
     """Load a YAML config and return ``(args, algo_name)``.
@@ -86,7 +91,8 @@ def load_config(config_path: str) -> tuple[Any, str]:
             for sub_key, sub_value in value.items():
                 if sub_key not in sub_level:
                     _fail_unknown_key(
-                        f"unknown config key '{key}.{sub_key}' in {config_path}", current
+                        f"unknown config key '{key}.{sub_key}' in {config_path}",
+                        current,
                     )
                 setattr(current, sub_key, sub_value)
         else:
@@ -98,6 +104,7 @@ def load_config(config_path: str) -> tuple[Any, str]:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def get_config_path(config_name: str) -> str:
     """Resolve a config *name* to a file path in ``configs/``."""

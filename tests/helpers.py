@@ -13,6 +13,7 @@ Rules for a smoke entry:
 - configs are built programmatically — never commit smoke configs under
   ``configs/``
 """
+
 from __future__ import annotations
 
 from typing import Any

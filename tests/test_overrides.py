@@ -9,6 +9,7 @@ name, which equals the YAML section name (``ppo_continuous_action.``), with
 ``algo.`` as an algorithm-agnostic shorthand — and malformed or unknown
 overrides are hard errors (SystemExit), never silently ignored.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -46,8 +47,14 @@ def test_algo_shorthand_alias(args):
 
 
 def test_bool_coercion(args):
-    for raw, expected in [("true", True), ("1", True), ("yes", True),
-                          ("false", False), ("0", False), ("nope", False)]:
+    for raw, expected in [
+        ("true", True),
+        ("1", True),
+        ("yes", True),
+        ("false", False),
+        ("0", False),
+        ("nope", False),
+    ]:
         apply_overrides(args, [f"track={raw}"])
         assert args.track is expected, f"track={raw!r}"
 

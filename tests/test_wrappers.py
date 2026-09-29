@@ -6,6 +6,7 @@ prove the normalize + clip pipeline is wired up.  Observations are *not*
 clipped by the stack: obs normalization/clipping is agent-side (opt-in via
 ``AgentConfig.use_obs_norm`` — see tests/test_normalization.py).
 """
+
 from __future__ import annotations
 
 import gymnasium as gym
@@ -47,6 +48,7 @@ class _DiscreteActionEnv(gym.Env):
 # ---------------------------------------------------------------------------
 # continuous_control_wrappers semantics
 # ---------------------------------------------------------------------------
+
 
 def test_rewards_normalized_and_clipped_obs_untouched():
     env = continuous_control_wrappers(_OutOfRangeEnv(), "Toy-v0", gamma=0.99)
@@ -90,6 +92,7 @@ def test_discrete_actions_rejected():
 # (parametrized over the registry — a new stack is covered automatically)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.parametrize("stack_name", sorted(WRAPPER_STACKS))
 def test_stack_produces_working_env(stack_name):
     stack = WRAPPER_STACKS[stack_name]
@@ -114,8 +117,11 @@ def test_discrete_stack_rejects_continuous_actions():
 # Resolution order
 # ---------------------------------------------------------------------------
 
+
 def test_resolve_named_stack():
-    assert resolve_wrapper_stack("continuous_control", None) is continuous_control_wrappers
+    assert (
+        resolve_wrapper_stack("continuous_control", None) is continuous_control_wrappers
+    )
 
 
 def test_resolve_empty_name_falls_back_to_default():
@@ -133,7 +139,11 @@ def test_make_env_without_stack_fails_loudly():
     """No adapter override + no wrappers argument must be an error, not a
     silently-raw env (an unclipped env trains subtly differently)."""
     thunk = make_env(
-        "Pendulum-v1", idx=0, capture_video=False, run_name="t", gamma=0.99,
+        "Pendulum-v1",
+        idx=0,
+        capture_video=False,
+        run_name="t",
+        gamma=0.99,
         wrappers=None,
     )
     with pytest.raises(ValueError, match="no preprocessing wrapper stack"):

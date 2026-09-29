@@ -67,8 +67,14 @@ def evaluate_checkpoint(
     envs = gym.vector.SyncVectorEnv(
         [
             make_env(
-                env_id, 0, capture_video, run_name, gamma,
-                experiment_dir, env_kwargs, name_prefix="eval",
+                env_id,
+                0,
+                capture_video,
+                run_name,
+                gamma,
+                experiment_dir,
+                env_kwargs,
+                name_prefix="eval",
                 wrappers=wrappers,
             )
         ]
@@ -91,8 +97,7 @@ def evaluate_checkpoint(
                 if done:
                     ret = float(infos["episode"]["r"][i])
                     print(
-                        f"eval_episode={len(episodic_returns)}, "
-                        f"episodic_return={ret}"
+                        f"eval_episode={len(episodic_returns)}, episodic_return={ret}"
                     )
                     episodic_returns.append(ret)
         obs = next_obs
@@ -225,19 +230,16 @@ class Algorithm(ABC):
             self.checkpoint_every if self.checkpoint_every > 0 else 0
         )
         self.checkpoints_keep = (
-            max(1, int(args.checkpoints_to_keep))
-            if self.checkpoint_every > 0
-            else 0
+            max(1, int(args.checkpoints_to_keep)) if self.checkpoint_every > 0 else 0
         )
 
         # Special logging cadence (at least one full rollout/update apart)
-        self.special_log_every = max(
-            int(args.special_log_every), int(args.batch_size)
-        )
+        self.special_log_every = max(int(args.special_log_every), int(args.batch_size))
         self.next_special_log_step = self.special_log_every
 
         if args.track:
             import wandb
+
             wandb.init(
                 project=os.environ.get("WANDB_PROJECT"),
                 entity=os.environ.get("WANDB_ENTITY"),
@@ -257,9 +259,7 @@ class Algorithm(ABC):
         args = self.args
         ckpt_path = latest_checkpoint_path(self.run_dir)
         if ckpt_path is None:
-            raise FileNotFoundError(
-                f"no checkpoint_gs*.pt found under {self.run_dir}"
-            )
+            raise FileNotFoundError(f"no checkpoint_gs*.pt found under {self.run_dir}")
         print(f"Resuming from {ckpt_path}")
         ckpt = load_checkpoint(ckpt_path, map_location="cpu")
         algo_state = ckpt["algorithm"]

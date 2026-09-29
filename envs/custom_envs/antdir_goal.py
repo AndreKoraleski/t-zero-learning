@@ -63,7 +63,9 @@ def _heading_sin_cos(vx: float, vy: float, ux: float, uy: float, eps: float = 1e
     return float(cross), float(dot)
 
 
-def _stamp_disk(out: np.ndarray, row: int, col: int, color: np.ndarray, radius: int) -> None:
+def _stamp_disk(
+    out: np.ndarray, row: int, col: int, color: np.ndarray, radius: int
+) -> None:
     h, w = out.shape[:2]
     r0, r1 = max(0, row - radius), min(h, row + radius + 1)
     c0, c1 = max(0, col - radius), min(w, col + radius + 1)
@@ -165,7 +167,9 @@ def _overlay_motion_goal_hud(
     vel_color = np.array([0, 220, 0], dtype=np.uint8)
     goal_color = np.array([255, 0, 200], dtype=np.uint8)
     _draw_arrow_world_hud(out, cy, cx, vx, vy, float(arrow_len), vel_color, thick=3)
-    _draw_arrow_world_hud(out, cy, cx, ux, uy, float(arrow_len * 0.85), goal_color, thick=2)
+    _draw_arrow_world_hud(
+        out, cy, cx, ux, uy, float(arrow_len * 0.85), goal_color, thick=2
+    )
     legend_r = r0 + 6
     _stamp_disk(out, legend_r, c0 + 8, vel_color, 3)
     _stamp_disk(out, legend_r, c0 + 28, goal_color, 3)
@@ -245,9 +249,7 @@ class AntDirGoalWrapper(gym.Wrapper):
             if dirs_pre.ndim != 2 or dirs_pre.shape[1] != 2:
                 raise ValueError("directions must be shape (n, 2)")
             if switch_after_steps is None:
-                switch_after_steps = (
-                    [] if len(dirs_pre) == 1 else [500]
-                )
+                switch_after_steps = [] if len(dirs_pre) == 1 else [500]
             self._fixed_directions = dirs_pre
             self._fixed_switch_after = np.array(switch_after_steps, dtype=np.int64)
             exp_sw = max(0, len(self._fixed_directions) - 1)
@@ -260,7 +262,9 @@ class AntDirGoalWrapper(gym.Wrapper):
 
         elif schedule_mode == "random_two":
             if len(self._direction_pool) < 2:
-                raise ValueError("random_two needs at least two directions in direction_pool")
+                raise ValueError(
+                    "random_two needs at least two directions in direction_pool"
+                )
         else:
             raise ValueError("schedule_mode must be 'fixed' or 'random_two'")
 
@@ -268,7 +272,9 @@ class AntDirGoalWrapper(gym.Wrapper):
         base_high = env.observation_space.high
         base_shape = env.observation_space.shape
         if len(base_shape) != 1:
-            raise ValueError("AntDirGoalWrapper expects 1-D Box observations from Ant-v5")
+            raise ValueError(
+                "AntDirGoalWrapper expects 1-D Box observations from Ant-v5"
+            )
         low = np.concatenate([base_low, np.full(self._goal_dim, -np.inf)])
         high = np.concatenate([base_high, np.full(self._goal_dim, np.inf)])
         self.observation_space = gym.spaces.Box(low=low, high=high, dtype=np.float64)

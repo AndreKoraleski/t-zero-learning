@@ -3,6 +3,7 @@
 These cover the generic layer only — algorithm payloads are exercised by the
 train/resume smoke tests.
 """
+
 from __future__ import annotations
 
 import random

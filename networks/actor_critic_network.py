@@ -11,7 +11,9 @@ def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     torch.nn.init.constant_(layer.bias, bias_const)
     return layer
 
+
 # TODO: make obs normalization agent-gnostic so we do not need to repeat it.
+
 
 class ContinuousActorCritic(nn.Module):
     """Gaussian actor–critic MLP for continuous actions (CleanRL-style PPO network).
@@ -59,7 +61,9 @@ class ContinuousActorCritic(nn.Module):
             act(),
             layer_init(nn.Linear(h, act_dim), std=0.01),
         )
-        self.actor_logstd = nn.Parameter(torch.zeros(1, np.prod(envs.single_action_space.shape)))
+        self.actor_logstd = nn.Parameter(
+            torch.zeros(1, np.prod(envs.single_action_space.shape))
+        )
 
     # --- observation normalization (no-ops when use_obs_norm is false) ---
 
@@ -83,7 +87,11 @@ class ContinuousActorCritic(nn.Module):
         return self.critic(x)
 
     def get_action_and_value(
-        self, x, action=None, input_is_normalized: bool = False, deterministic: bool = False
+        self,
+        x,
+        action=None,
+        input_is_normalized: bool = False,
+        deterministic: bool = False,
     ):
         if not input_is_normalized:
             x = self.normalize_obs(x)
@@ -93,7 +101,12 @@ class ContinuousActorCritic(nn.Module):
         probs = Normal(action_mean, action_std)
         if action is None:
             action = action_mean if deterministic else probs.sample()
-        return action, probs.log_prob(action).sum(1), probs.entropy().sum(1), self.critic(x)
+        return (
+            action,
+            probs.log_prob(action).sum(1),
+            probs.entropy().sum(1),
+            self.critic(x),
+        )
 
     def act(self, x, deterministic: bool = False):
         """Action selection for evaluation/inference (normalizes obs internally).

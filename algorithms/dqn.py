@@ -15,6 +15,7 @@ only provides run plumbing (seeding, run dir, wandb, checkpoint scheduling).
 Adapted from CleanRL (https://github.com/vwxyzjn/cleanrl),
 Copyright (c) 2019 CleanRL developers, MIT License (see LICENSE).
 """
+
 import time
 from collections import deque, namedtuple
 from dataclasses import dataclass, field
@@ -39,6 +40,7 @@ from networks import QNetwork
 @dataclass
 class DQNConfig:
     """DQN algorithm hyperparameters for discrete actions."""
+
     learning_rate: float = 2.5e-4
     """the learning rate of the optimizer"""
     buffer_size: int = 10000
@@ -71,12 +73,15 @@ class Args(RunConfig):
     :class:`AgentConfig` (network architecture) and :class:`DQNConfig`
     (algorithm hyperparameters).
     """
+
     algorithm: str = "dqn"
     env_id: str = "CartPole-v1"
     """the gymnasium environment id (must have a Discrete action space)"""
 
     # Nested configs
-    agent: AgentConfig = field(default_factory=lambda: AgentConfig(activation="ReLU", hidden_layers_size=120))
+    agent: AgentConfig = field(
+        default_factory=lambda: AgentConfig(activation="ReLU", hidden_layers_size=120)
+    )
     """network architecture configuration"""
     dqn: DQNConfig = field(default_factory=DQNConfig)
     """DQN hyperparameters — the field name deliberately equals the algorithm
@@ -94,7 +99,9 @@ class Args(RunConfig):
 # isolation, before any training run.
 # ---------------------------------------------------------------------------
 
-Batch = namedtuple("Batch", ["observations", "actions", "next_observations", "rewards", "dones"])
+Batch = namedtuple(
+    "Batch", ["observations", "actions", "next_observations", "rewards", "dones"]
+)
 
 
 class ReplayBuffer:
@@ -119,9 +126,7 @@ class ReplayBuffer:
         self.size = 0  # number of valid transitions currently stored
 
     def add(self, obs, next_obs, action: int, reward: float, done: float):
-        """Store one transition, overwriting the oldest one when full.
-
-        """
+        """Store one transition, overwriting the oldest one when full."""
         # ==================== YOUR CODE HERE (Part 1a) ====================
 
         i = self.pos
@@ -146,30 +151,37 @@ class ReplayBuffer:
 
         """
         # ==================== YOUR CODE HERE (Part 1b) ====================
-        
+
         indices = np.random.choice(self.size, size=batch_size, replace=True)
 
         observations = torch.as_tensor(self.observations[indices], device=self.device)
-        actions = torch.as_tensor(self.actions[indices], dtype=torch.int64, device=self.device)
-        next_observations = torch.as_tensor(self.next_observations[indices], device=self.device)
+        actions = torch.as_tensor(
+            self.actions[indices], dtype=torch.int64, device=self.device
+        )
+        next_observations = torch.as_tensor(
+            self.next_observations[indices], device=self.device
+        )
         rewards = torch.as_tensor(self.rewards[indices], device=self.device)
         dones = torch.as_tensor(self.dones[indices], device=self.device)
 
-        return Batch(observations=observations, actions=actions, next_observations=next_observations, rewards=rewards, dones=dones)
+        return Batch(
+            observations=observations,
+            actions=actions,
+            next_observations=next_observations,
+            rewards=rewards,
+            dones=dones,
+        )
 
         # ==================================================================
 
 
 def compute_td_targets(target_network, batch: Batch, gamma: float) -> torch.Tensor:
-    """Compute the one-step TD target for a batch of transitions.
-
-    """
+    """Compute the one-step TD target for a batch of transitions."""
     # ===================== YOUR CODE HERE (Part 2) =====================
     next_q_values = target_network(batch.next_observations).max(dim=1).values
 
     td_targets = (
-        batch.rewards.squeeze(1)
-        + gamma * (1 - batch.dones.squeeze(1)) * next_q_values
+        batch.rewards.squeeze(1) + gamma * (1 - batch.dones.squeeze(1)) * next_q_values
     )
 
     return td_targets
@@ -242,13 +254,17 @@ class DQN(Algorithm):
 
         self._setup_logging_and_checkpoints()
 
-        assert isinstance(self.envs.single_action_space, gym.spaces.Discrete), "only discrete action space is supported"
+        assert isinstance(self.envs.single_action_space, gym.spaces.Discrete), (
+            "only discrete action space is supported"
+        )
 
         self.q_network = QNetwork(
             self.envs, args.agent.activation, args.agent.hidden_layers_size
         ).to(self.device)
         self.agent = self.q_network  # base-class hooks (model saving) expect self.agent
-        self.optimizer = optim.Adam(self.q_network.parameters(), lr=args.algo.learning_rate)
+        self.optimizer = optim.Adam(
+            self.q_network.parameters(), lr=args.algo.learning_rate
+        )
         self.target_network = QNetwork(
             self.envs, args.agent.activation, args.agent.hidden_layers_size
         ).to(self.device)
@@ -282,25 +298,39 @@ class DQN(Algorithm):
         # not enter the replay buffer.
         autoreset = np.zeros(args.num_envs, dtype=bool)
 
-        with tqdm(range(int(args.total_timesteps)), desc="DQN steps", unit="step") as pbar:
+        with tqdm(
+            range(int(args.total_timesteps)), desc="DQN steps", unit="step"
+        ) as pbar:
             for global_step in pbar:
                 self.global_step = global_step
 
                 # ALGO LOGIC: epsilon-greedy action selection
                 epsilon = linear_schedule(
-                    cfg.start_e, cfg.end_e, cfg.exploration_fraction * args.total_timesteps, global_step
+                    cfg.start_e,
+                    cfg.end_e,
+                    cfg.exploration_fraction * args.total_timesteps,
+                    global_step,
                 )
                 if np.random.random() < epsilon:
-                    actions = np.array([envs.single_action_space.sample() for _ in range(args.num_envs)])
+                    actions = np.array(
+                        [
+                            envs.single_action_space.sample()
+                            for _ in range(args.num_envs)
+                        ]
+                    )
                 else:
                     with torch.no_grad():
-                        q_values = self.q_network(torch.as_tensor(obs, dtype=torch.float32, device=device))
+                        q_values = self.q_network(
+                            torch.as_tensor(obs, dtype=torch.float32, device=device)
+                        )
                     actions = torch.argmax(q_values, dim=1).cpu().numpy()
 
                 next_obs, rewards, terminations, truncations, infos = envs.step(actions)
 
-                completed_returns, completed_lengths, _ = episode_completions_from_vector_infos(
-                    terminations, truncations, infos
+                completed_returns, completed_lengths, _ = (
+                    episode_completions_from_vector_infos(
+                        terminations, truncations, infos
+                    )
                 )
                 if completed_returns:
                     self.recent_ep_returns.extend(completed_returns)
@@ -322,11 +352,20 @@ class DQN(Algorithm):
                 obs = next_obs
 
                 # ALGO LOGIC: training
-                if global_step > cfg.learning_starts and global_step % cfg.train_frequency == 0:
+                if (
+                    global_step > cfg.learning_starts
+                    and global_step % cfg.train_frequency == 0
+                ):
                     data = self.rb.sample(cfg.batch_size)
                     with torch.no_grad():
-                        td_target = compute_td_targets(self.target_network, data, cfg.gamma)
-                    old_val = self.q_network(data.observations).gather(1, data.actions).squeeze()
+                        td_target = compute_td_targets(
+                            self.target_network, data, cfg.gamma
+                        )
+                    old_val = (
+                        self.q_network(data.observations)
+                        .gather(1, data.actions)
+                        .squeeze()
+                    )
                     loss = F.mse_loss(td_target, old_val)
 
                     self.optimizer.zero_grad()
@@ -334,12 +373,21 @@ class DQN(Algorithm):
                     self.optimizer.step()
 
                     if global_step % 100 == 0:
-                        self._log_metrics(pbar, epsilon=epsilon, loss=loss, old_val=old_val)
+                        self._log_metrics(
+                            pbar, epsilon=epsilon, loss=loss, old_val=old_val
+                        )
 
                 # update target network
-                if global_step > cfg.learning_starts and global_step % cfg.target_network_frequency == 0:
-                    for target_param, q_param in zip(self.target_network.parameters(), self.q_network.parameters()):
-                        target_param.data.copy_(cfg.tau * q_param.data + (1.0 - cfg.tau) * target_param.data)
+                if (
+                    global_step > cfg.learning_starts
+                    and global_step % cfg.target_network_frequency == 0
+                ):
+                    for target_param, q_param in zip(
+                        self.target_network.parameters(), self.q_network.parameters()
+                    ):
+                        target_param.data.copy_(
+                            cfg.tau * q_param.data + (1.0 - cfg.tau) * target_param.data
+                        )
 
         self._post_training_eval()
         envs.close()
@@ -351,7 +399,11 @@ class DQN(Algorithm):
     def _log_metrics(self, pbar, *, epsilon, loss, old_val) -> None:
         """Pure diagnostics — nothing here affects training."""
         args = self.args
-        sps = int(self.global_step / (time.time() - self.start_time)) if self.global_step else 0
+        sps = (
+            int(self.global_step / (time.time() - self.start_time))
+            if self.global_step
+            else 0
+        )
         postfix: dict = {"sps": sps, "eps": round(float(epsilon), 3)}
         if len(self.recent_ep_returns) > 0:
             postfix["r_last100"] = round(float(np.mean(self.recent_ep_returns)), 1)
@@ -371,8 +423,12 @@ class DQN(Algorithm):
         if len(self.recent_ep_returns) > 0:
             metrics_dict.update(
                 {
-                    "charts/episodic_return_mean_last100": float(np.mean(self.recent_ep_returns)),
-                    "charts/episodic_length_mean_last100": float(np.mean(self.recent_ep_lengths)),
+                    "charts/episodic_return_mean_last100": float(
+                        np.mean(self.recent_ep_returns)
+                    ),
+                    "charts/episodic_length_mean_last100": float(
+                        np.mean(self.recent_ep_lengths)
+                    ),
                     "charts/num_episodes": self.global_ep_counter,
                 }
             )

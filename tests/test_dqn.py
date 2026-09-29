@@ -94,7 +94,11 @@ def make_batch(next_obs_vals, rewards, dones):
 
 
 def test_td_target_terminal_equals_reward():
-    batch = make_batch(next_obs_vals=[10.0, 20.0, 30.0], rewards=[1.0, -2.0, 5.0], dones=[1.0, 1.0, 1.0])
+    batch = make_batch(
+        next_obs_vals=[10.0, 20.0, 30.0],
+        rewards=[1.0, -2.0, 5.0],
+        dones=[1.0, 1.0, 1.0],
+    )
     targets = dqn.compute_td_targets(_stub_q, batch, gamma=0.99)
     assert targets.shape == (3,)
     assert torch.allclose(targets, torch.tensor([1.0, -2.0, 5.0]))

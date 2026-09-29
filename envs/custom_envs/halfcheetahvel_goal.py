@@ -124,14 +124,10 @@ class HalfCheetahVelGoalWrapper(gym.Wrapper):
         base_low = env.observation_space.low
         base_high = env.observation_space.high
         if env.observation_space.shape != (len(base_low),):
-            raise ValueError(
-                "HalfCheetahVelGoalWrapper expects 1-D Box observations"
-            )
+            raise ValueError("HalfCheetahVelGoalWrapper expects 1-D Box observations")
         low = np.concatenate([base_low, [-np.inf]])
         high = np.concatenate([base_high, [np.inf]])
-        self.observation_space = gym.spaces.Box(
-            low=low, high=high, dtype=np.float64
-        )
+        self.observation_space = gym.spaces.Box(low=low, high=high, dtype=np.float64)
 
         self._upright_reward_weight = float(upright_reward_weight)
 

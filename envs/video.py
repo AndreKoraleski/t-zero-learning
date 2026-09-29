@@ -65,7 +65,11 @@ def resolve_training_video_schedule(
     Returns 0 when video recording is disabled, or when the env declares that
     it does not support training video (see :mod:`envs.adapters`).
     """
-    if not capture_video or not video_every_global_steps or video_every_global_steps <= 0:
+    if (
+        not capture_video
+        or not video_every_global_steps
+        or video_every_global_steps <= 0
+    ):
         return 0
 
     if not get_adapter(env_id).supports_training_video:

@@ -14,6 +14,7 @@ and consumes it via ``load_checkpoint_state_dict(state)``.  This module only
 handles the generic envelope: file I/O, RNG serialization, the
 ``format_version`` sanity check, and housekeeping (rotation, cleanup).
 """
+
 from __future__ import annotations
 
 import random
@@ -35,6 +36,7 @@ _CHECKPOINT_RE = re.compile(r"^checkpoint_gs(\d+)\.pt$")
 # ------------------------------------------------------------------
 # RNG helpers
 # ------------------------------------------------------------------
+
 
 def gather_rng_state() -> dict[str, Any]:
     """Capture main-process RNG state (Python, NumPy, PyTorch CPU/CUDA)."""
@@ -64,9 +66,11 @@ def apply_rng_state(rng_state: Mapping[str, Any], cuda: bool) -> None:
 # Config YAML
 # ------------------------------------------------------------------
 
+
 def write_run_config_yaml(experiment_dir: str, run_name: str, args: Any) -> None:
     """Persist the training configuration as ``config.yml`` inside the run directory."""
     from dataclasses import asdict, fields
+
     run_dir = Path(experiment_dir) / run_name
     run_dir.mkdir(parents=True, exist_ok=True)
     config_save_path = run_dir / "config.yml"
@@ -80,10 +84,10 @@ def write_run_config_yaml(experiment_dir: str, run_name: str, args: Any) -> None
     print(f"Config saved to {config_save_path}")
 
 
-
 # ------------------------------------------------------------------
 # Save / load
 # ------------------------------------------------------------------
+
 
 def _checkpoint_sort_key(path: Path) -> int:
     m = _CHECKPOINT_RE.match(path.name)

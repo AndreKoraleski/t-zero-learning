@@ -4,6 +4,7 @@ Tests import repo modules directly (``config_loader``, ``checkpoint``, ...),
 so the repo root is put on ``sys.path`` here — the same "run from repo root"
 convention as ``train.py``.
 """
+
 from __future__ import annotations
 
 import os

@@ -3,6 +3,7 @@
 ASSIGNMENT (Part 3): complete ``DiscreteActorCritic.get_action_and_value``.
 Check your work with:   python -m pytest tests/test_a2c.py
 """
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -61,7 +62,16 @@ class DiscreteActorCritic(nn.Module):
         ``sample()``, ``log_prob(action)`` and ``entropy()``.
         """
         # ===================== YOUR CODE HERE (Part 3) =====================
-        raise NotImplementedError("Implement DiscreteActorCritic.get_action_and_value")
+        logits = self.actor(x)
+        distribution = Categorical(logits=logits)
+        if action is None:
+            action = logits.argmax(dim=1) if deterministic else distribution.sample()
+        return (
+            action,
+            distribution.log_prob(action),
+            distribution.entropy(),
+            self.critic(x),
+        )
         # ===================================================================
 
     def act(self, x, deterministic: bool = False):

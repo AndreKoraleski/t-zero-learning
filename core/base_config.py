@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 @dataclass
 class AgentConfig:
     """Network architecture configuration — shared across algorithms."""
+
     activation: str = "Tanh"
     """hidden activation: attribute name on ``torch.nn`` (e.g. Tanh, ReLU, GELU, SiLU)"""
     hidden_layers_size: int = 64
@@ -28,6 +29,7 @@ class RunConfig:
     Algorithm-specific ``Args`` dataclasses inherit from this so that
     ``args.seed``, ``args.env_id``, etc. work without nesting.
     """
+
     exp_name: str = "experiment"
     """the name of this experiment (typically set by train.py from the config name)"""
     algorithm: str = ""

@@ -6,6 +6,7 @@ in automatically.  Semantic tests encode what each env is *supposed* to do
 (reward math, goal features, schedule switching); every new env should add
 its own — use these as the template.
 """
+
 from __future__ import annotations
 
 import gymnasium as gym
@@ -24,6 +25,7 @@ CUSTOM_ENV_IDS = sorted(
 # ---------------------------------------------------------------------------
 # Generic contract (parametrized — covers new registrations automatically)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.parametrize("env_id", CUSTOM_ENV_IDS)
 def test_env_contract(env_id):
@@ -54,6 +56,7 @@ def test_env_reset_is_seed_deterministic(env_id):
 # HalfCheetahVel-v1: reward = -|x_velocity - target_vel| + reward_ctrl
 # ---------------------------------------------------------------------------
 
+
 def test_halfcheetahvel_reward_math():
     env = gym.make("HalfCheetahVel-v1", target_vel=0.5)
     env.reset(seed=0)
@@ -68,6 +71,7 @@ def test_halfcheetahvel_reward_math():
 # ---------------------------------------------------------------------------
 # AntDir-v1: reward_forward = v · û  (velocity projected on target direction)
 # ---------------------------------------------------------------------------
+
 
 def test_antdir_reward_math():
     env = gym.make("AntDir-v1", target_dir=[0.0, 1.0])

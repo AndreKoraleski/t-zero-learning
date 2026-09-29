@@ -18,15 +18,15 @@ Step 3).
 
 ```python
 {
-    "format_version": 2,      # loader refuses any other version
-    "global_step": 123456,    # env steps completed so far
-    "rng": {                  # main-process RNG, captured at save time
-        "python":     ...,    # random.getstate()
-        "numpy":      ...,    # np.random.get_state()
-        "torch_cpu":  ...,    # torch.get_rng_state()
-        "torch_cuda": ...,    # per-device states (None on CPU-only runs)
+    "format_version": 2,  # loader refuses any other version
+    "global_step": 123456,  # env steps completed so far
+    "rng": {  # main-process RNG, captured at save time
+        "python": ...,  # random.getstate()
+        "numpy": ...,  # np.random.get_state()
+        "torch_cpu": ...,  # torch.get_rng_state()
+        "torch_cuda": ...,  # per-device states (None on CPU-only runs)
     },
-    "algorithm": { ... },     # the algorithm's own payload, opaque to core/
+    "algorithm": {...},  # the algorithm's own payload, opaque to core/
 }
 ```
 

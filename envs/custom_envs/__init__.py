@@ -1,8 +1,9 @@
 from gymnasium.envs.registration import register
+
 register(
     id="HalfCheetahVel-v1",
     entry_point="envs.custom_envs.halfcheetahvel:make_target_vel_env",
-    kwargs={"target_vel": 1.0, "render_mode":"rgb_array"}
+    kwargs={"target_vel": 1.0, "render_mode": "rgb_array"},
 )
 register(
     id="HalfCheetahVelGoal-v1",
@@ -17,7 +18,7 @@ register(
 register(
     id="AntDir-v1",
     entry_point="envs.custom_envs.antdir:make_target_dir_env",
-    kwargs={"target_dir": [0.0, 1.0], "render_mode":"rgb_array"}
+    kwargs={"target_dir": [0.0, 1.0], "render_mode": "rgb_array"},
 )
 register(
     id="AntDirGoal-v1",

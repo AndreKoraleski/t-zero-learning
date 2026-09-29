@@ -3,6 +3,7 @@
 Parametrized over ``configs/*.yml`` — adding a config automatically adds a
 test; a stale config (unknown algorithm, wrong structure) fails CI.
 """
+
 from __future__ import annotations
 
 from pathlib import Path

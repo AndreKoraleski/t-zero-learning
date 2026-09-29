@@ -165,22 +165,30 @@ class MySimEnv(gym.Env):
     def __init__(self, render_mode=None, **kwargs):
         self.render_mode = render_mode
         self.sim = ThirdPartySim(**kwargs)
-        self.observation_space = spaces.Box(-np.inf, np.inf, shape=(OBS_DIM,), dtype=np.float64)
+        self.observation_space = spaces.Box(
+            -np.inf, np.inf, shape=(OBS_DIM,), dtype=np.float64
+        )
         self.action_space = spaces.Box(-1.0, 1.0, shape=(ACT_DIM,), dtype=np.float32)
 
     def reset(self, *, seed=None, options=None):
-        super().reset(seed=seed)          # seeds self.np_random
+        super().reset(seed=seed)  # seeds self.np_random
         obs = self.sim.reset(seed=seed)
         return np.asarray(obs, dtype=np.float64), {}
 
     def step(self, action):
         obs, reward, done = self.sim.step(action)
-        terminated = done                  # true environment termination
-        truncated = False                  # time-limit cutoff (see below)
-        return np.asarray(obs, dtype=np.float64), float(reward), terminated, truncated, {}
+        terminated = done  # true environment termination
+        truncated = False  # time-limit cutoff (see below)
+        return (
+            np.asarray(obs, dtype=np.float64),
+            float(reward),
+            terminated,
+            truncated,
+            {},
+        )
 
     def render(self):
-        return self.sim.render_rgb()       # HxWx3 uint8, required only for video
+        return self.sim.render_rgb()  # HxWx3 uint8, required only for video
 ```
 
 Contract checklist (Gymnasium ≥ 1.0 API — the framework assumes all of this):
@@ -228,7 +236,7 @@ an [EnvAdapter](../envs/adapters/base.py):
 from envs.adapters.base import EnvAdapter, register_adapter
 
 register_adapter(
-    "MyEnv",                      # env-id *prefix*; longest match wins
+    "MyEnv",  # env-id *prefix*; longest match wins
     EnvAdapter(
         skip_episode_stats=True,
         supports_training_video=False,

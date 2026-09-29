@@ -1,4 +1,5 @@
 """ContinuousActorCritic: shapes, activation resolution, init determinism."""
+
 from __future__ import annotations
 
 import gymnasium as gym

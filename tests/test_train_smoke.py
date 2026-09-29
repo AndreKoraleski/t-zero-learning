@@ -6,6 +6,7 @@ smoke settings).  Asserts only the *mechanics* every algorithm shares: run
 dir layout, config persistence, checkpoint envelope, finite state.  Never
 asserts learning performance (RL is stochastic).
 """
+
 from __future__ import annotations
 
 import pytest
