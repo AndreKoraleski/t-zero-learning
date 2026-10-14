@@ -145,7 +145,19 @@ def compute_gae(
         advantages + values`` (the critic's regression target).
     """
     # ===================== YOUR CODE HERE (Part 1) =====================
-    raise NotImplementedError("Implement compute_gae")
+    advantages = torch.zeros_like(rewards)
+    lastgaelam = torch.zeros_like(next_value)
+    for t in reversed(range(rewards.shape[0])):
+        if t == rewards.shape[0] - 1:
+            nonterminal = 1.0 - next_done
+            nextvalue = next_value
+        else:
+            nonterminal = 1.0 - dones[t + 1]
+            nextvalue = values[t + 1]
+        delta = rewards[t] + gamma * nonterminal * nextvalue - values[t]
+        lastgaelam = delta + gamma * gae_lambda * nonterminal * lastgaelam
+        advantages[t] = lastgaelam
+    return advantages, advantages + values
     # ===================================================================
 
 
@@ -162,7 +174,10 @@ def compute_clipped_policy_loss(
     objective.
     """
     # ===================== YOUR CODE HERE (Part 2) =====================
-    raise NotImplementedError("Implement compute_clipped_policy_loss")
+    ratio = torch.exp(newlogprob - oldlogprob.detach())
+    advantages = advantages.detach()
+    clipped = torch.clamp(ratio, 1 - clip_coef, 1 + clip_coef)
+    return -torch.min(ratio * advantages, clipped * advantages).mean()
     # ===================================================================
 
 
@@ -177,7 +192,12 @@ def approx_kl_and_clipfrac(
     ``clipfrac`` is the fraction of samples with ``|ratio - 1| > clip_coef``.
     """
     # ===================== YOUR CODE HERE (Part 3) =====================
-    raise NotImplementedError("Implement approx_kl_and_clipfrac")
+    with torch.no_grad():
+        logratio = newlogprob - oldlogprob
+        ratio = torch.exp(logratio)
+        approx_kl = ((ratio - 1) - logratio).mean()
+        clipfrac = ((ratio - 1).abs() > clip_coef).float().mean()
+    return approx_kl, clipfrac
     # ===================================================================
 
 
