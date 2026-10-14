@@ -21,7 +21,6 @@ whole batch of transitions produces one gradient step on
 Adapted from CleanRL (https://github.com/vwxyzjn/cleanrl),
 Copyright (c) 2019 CleanRL developers, MIT License (see LICENSE).
 """
-
 import time
 from collections import deque
 from dataclasses import dataclass, field
@@ -38,16 +37,15 @@ import envs.custom_envs  # noqa: F401 — Gym registration side effects
 from envs.custom_envs.envs_utils import episode_completions_from_vector_infos
 from envs import build_vector_envs, resolve_training_video_schedule
 from envs.wrappers import discrete_control_wrappers
-from networks.discrete_actor_critic import DiscreteActorCritic
+from networks import get_network
 from core.checkpoint import save_checkpoint
-from core.base_config import AgentConfig, RunConfig
+from core.base_config import RunConfig
 from algorithms.base import Algorithm
 
 
 @dataclass
 class A2CConfig:
     """A2C algorithm hyperparameters for discrete actions."""
-
     learning_rate: float = 7e-4
     """the learning rate of the optimizer"""
     num_steps: int = 5
@@ -69,10 +67,9 @@ class Args(RunConfig):
     """Full configuration for A2C with discrete actions.
 
     Inherits run-level fields from :class:`RunConfig` and composes
-    :class:`AgentConfig` (network architecture) and :class:`A2CConfig`
-    (algorithm hyperparameters).
+    :class:`A2CConfig` (algorithm hyperparameters); the network is
+    ``network`` + ``network_kwargs`` (see :func:`networks.get_network`).
     """
-
     algorithm: str = "a2c"
     env_id: str = "CartPole-v1"
     """the gymnasium environment id (must have a Discrete action space)"""
@@ -80,8 +77,9 @@ class Args(RunConfig):
     """parallel environments stepped in lockstep (A3C's actors)"""
 
     # Nested configs
-    agent: AgentConfig = field(default_factory=AgentConfig)
-    """network architecture configuration"""
+    network: str = "DiscreteActorCritic"
+    """network class to build (see ``RunConfig.network``); any class with
+    ``get_value``, ``get_action_and_value`` and ``act`` works"""
     a2c: A2CConfig = field(default_factory=A2CConfig)
     """A2C hyperparameters — the field name deliberately equals the algorithm
     name, so the YAML section, saved run configs, and CLI override paths all
@@ -127,10 +125,7 @@ def compute_n_step_returns(
 
 
 def compute_policy_loss(
-    logprobs: torch.Tensor,
-    returns: torch.Tensor,
-    values: torch.Tensor,
-    use_baseline: bool = True,
+    logprobs: torch.Tensor, returns: torch.Tensor, values: torch.Tensor, use_baseline: bool = True
 ) -> torch.Tensor:
     """Policy-gradient loss for a flat batch (shape (B,) each).
 
@@ -197,16 +192,11 @@ class A2C(Algorithm):
 
         self._setup_logging_and_checkpoints()
 
-        assert isinstance(self.envs.single_action_space, gym.spaces.Discrete), (
-            "only discrete action space is supported"
-        )
+        assert isinstance(self.envs.single_action_space, gym.spaces.Discrete), "only discrete action space is supported"
 
-        self.agent = DiscreteActorCritic(
-            self.envs, args.agent.activation, args.agent.hidden_layers_size
-        ).to(self.device)
-        self.optimizer = optim.Adam(
-            self.agent.parameters(), lr=args.algo.learning_rate, eps=1e-5
-        )
+        Network = get_network(args.network)
+        self.agent = Network(self.envs, **args.network_kwargs).to(self.device)
+        self.optimizer = optim.Adam(self.agent.parameters(), lr=args.algo.learning_rate, eps=1e-5)
 
         self.last_iteration_resume = 0
         if self.resuming:
@@ -237,9 +227,7 @@ class A2C(Algorithm):
             self.recent_ep_lengths = deque(maxlen=100)
         # Env simulator state is not checkpointed: (re)start from fresh episodes.
         self.next_obs, _ = self.envs.reset(seed=args.seed + self.global_step)
-        self.next_obs = torch.as_tensor(
-            self.next_obs, dtype=torch.float32, device=self.device
-        )
+        self.next_obs = torch.as_tensor(self.next_obs, dtype=torch.float32, device=self.device)
         self.autoreset = torch.zeros(N, device=self.device)
 
     # ------------------------------------------------------------------
@@ -261,11 +249,7 @@ class A2C(Algorithm):
             envs.close()
             return
 
-        with tqdm(
-            range(iter_start, args.num_iterations + 1),
-            desc="A2C iterations",
-            unit="iter",
-        ) as pbar:
+        with tqdm(range(iter_start, args.num_iterations + 1), desc="A2C iterations", unit="iter") as pbar:
             for iteration in pbar:
                 self.iteration = iteration
 
@@ -281,25 +265,15 @@ class A2C(Algorithm):
                         action, _, _, _ = agent.get_action_and_value(self.next_obs)
                     self.actions[step] = action
 
-                    next_obs, reward, terminations, truncations, infos = envs.step(
-                        action.cpu().numpy()
-                    )
+                    next_obs, reward, terminations, truncations, infos = envs.step(action.cpu().numpy())
                     done = np.logical_or(terminations, truncations)
-                    self.rewards[step] = torch.as_tensor(
-                        reward, dtype=torch.float32, device=device
-                    )
-                    self.dones[step] = torch.as_tensor(
-                        done, dtype=torch.float32, device=device
-                    )
-                    self.next_obs = torch.as_tensor(
-                        next_obs, dtype=torch.float32, device=device
-                    )
+                    self.rewards[step] = torch.as_tensor(reward, dtype=torch.float32, device=device)
+                    self.dones[step] = torch.as_tensor(done, dtype=torch.float32, device=device)
+                    self.next_obs = torch.as_tensor(next_obs, dtype=torch.float32, device=device)
                     self.autoreset = self.dones[step]
 
-                    completed_returns, completed_lengths, _ = (
-                        episode_completions_from_vector_infos(
-                            terminations, truncations, infos
-                        )
+                    completed_returns, completed_lengths, _ = episode_completions_from_vector_infos(
+                        terminations, truncations, infos
                     )
                     if completed_returns:
                         self.recent_ep_returns.extend(completed_returns)
@@ -309,35 +283,25 @@ class A2C(Algorithm):
                 # ---------------- targets: bootstrapped n-step returns ----------------
                 with torch.no_grad():
                     next_value = agent.get_value(self.next_obs).reshape(-1)
-                    returns = compute_n_step_returns(
-                        self.rewards, self.dones, next_value, cfg.gamma
-                    )
+                    returns = compute_n_step_returns(self.rewards, self.dones, next_value, cfg.gamma)
 
                 # ---------------- update: one gradient step on the whole batch ----------------
                 keep = self.valid.reshape(-1).bool()
-                b_obs = self.obs.reshape((-1,) + envs.single_observation_space.shape)[
-                    keep
-                ]
+                b_obs = self.obs.reshape((-1,) + envs.single_observation_space.shape)[keep]
                 b_actions = self.actions.reshape(-1)[keep]
                 b_returns = returns.reshape(-1)[keep]
 
-                _, logprobs, entropy, values = agent.get_action_and_value(
-                    b_obs, b_actions
-                )
+                _, logprobs, entropy, values = agent.get_action_and_value(b_obs, b_actions)
                 values = values.reshape(-1)
 
-                pg_loss = compute_policy_loss(
-                    logprobs, b_returns, values, cfg.use_baseline
-                )
+                pg_loss = compute_policy_loss(logprobs, b_returns, values, cfg.use_baseline)
                 v_loss = 0.5 * ((values - b_returns) ** 2).mean()
                 entropy_loss = entropy.mean()
                 loss = pg_loss + cfg.vf_coef * v_loss - cfg.ent_coef * entropy_loss
 
                 self.optimizer.zero_grad()
                 loss.backward()
-                grad_norm = nn.utils.clip_grad_norm_(
-                    agent.parameters(), cfg.max_grad_norm
-                )
+                grad_norm = nn.utils.clip_grad_norm_(agent.parameters(), cfg.max_grad_norm)
                 self.optimizer.step()
 
                 if iteration % self.log_every_iters == 0:
@@ -351,17 +315,12 @@ class A2C(Algorithm):
                         b_returns=b_returns,
                     )
 
-                if (
-                    self.checkpoint_every > 0
-                    and self.global_step >= self.next_checkpoint_step
-                ):
+                if self.checkpoint_every > 0 and self.global_step >= self.next_checkpoint_step:
                     while self.next_checkpoint_step <= self.global_step:
                         self.next_checkpoint_step += self.checkpoint_every
                     save_checkpoint(
-                        self.run_dir,
-                        self.global_step,
-                        self.checkpoint_state_dict(),
-                        self.checkpoints_keep,
+                        self.run_dir, self.global_step,
+                        self.checkpoint_state_dict(), self.checkpoints_keep,
                     )
 
         self._post_training_eval()
@@ -371,21 +330,11 @@ class A2C(Algorithm):
     # Logging — periodic diagnostics (tqdm postfix + wandb)
     # ------------------------------------------------------------------
 
-    def _log_metrics(
-        self, pbar, *, pg_loss, v_loss, entropy_loss, grad_norm, b_values, b_returns
-    ) -> None:
+    def _log_metrics(self, pbar, *, pg_loss, v_loss, entropy_loss, grad_norm, b_values, b_returns) -> None:
         """Pure diagnostics — nothing here affects training."""
         args = self.args
-        sps = (
-            int(self.global_step / (time.time() - self.start_time))
-            if self.global_step
-            else 0
-        )
-        postfix: dict = {
-            "sps": sps,
-            "gs": self.global_step,
-            "ent": round(float(entropy_loss), 3),
-        }
+        sps = int(self.global_step / (time.time() - self.start_time)) if self.global_step else 0
+        postfix: dict = {"sps": sps, "gs": self.global_step, "ent": round(float(entropy_loss), 3)}
         if len(self.recent_ep_returns) > 0:
             postfix["r_last100"] = round(float(np.mean(self.recent_ep_returns)), 1)
         pbar.set_postfix(postfix, refresh=False)
@@ -407,36 +356,19 @@ class A2C(Algorithm):
             "losses/explained_variance": explained_var,
             "losses/grad_norm": float(grad_norm),
             "charts/advantage_mean": weights.mean().item(),
-            "charts/advantage_std": weights.std().item()
-            if weights.numel() > 1
-            else 0.0,
+            "charts/advantage_std": weights.std().item() if weights.numel() > 1 else 0.0,
             "charts/SPS": sps,
             "global_step": self.global_step,
         }
         if len(self.recent_ep_returns) > 0:
             metrics_dict.update(
                 {
-                    "charts/episodic_return_mean_last100": float(
-                        np.mean(self.recent_ep_returns)
-                    ),
-                    "charts/episodic_length_mean_last100": float(
-                        np.mean(self.recent_ep_lengths)
-                    ),
+                    "charts/episodic_return_mean_last100": float(np.mean(self.recent_ep_returns)),
+                    "charts/episodic_length_mean_last100": float(np.mean(self.recent_ep_lengths)),
                     "charts/num_episodes": self.global_ep_counter,
                 }
             )
         wandb.log(metrics_dict, step=self.global_step)
-
-    # ------------------------------------------------------------------
-    # Evaluation — the framework loop rebuilds the agent from these kwargs
-    # and drives it through DiscreteActorCritic.act
-    # ------------------------------------------------------------------
-
-    def eval_model_kwargs(self) -> dict:
-        return dict(
-            activation=self.args.agent.activation,
-            hidden_layers_size=self.args.agent.hidden_layers_size,
-        )
 
     # ------------------------------------------------------------------
     # Checkpoint contract — on-policy, so only network/optimizer/counters

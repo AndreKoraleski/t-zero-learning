@@ -7,7 +7,6 @@ fixes to the shared parts should be mirrored there.
 Adapted from CleanRL (https://github.com/vwxyzjn/cleanrl),
 Copyright (c) 2019 CleanRL developers, MIT License (see LICENSE).
 """
-
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -28,16 +27,15 @@ from envs import (
     make_env,
     resolve_training_video_schedule,
 )
-from networks import ContinuousActorCritic
+from networks import get_network
 from core.checkpoint import save_checkpoint
-from core.base_config import AgentConfig, RunConfig
+from core.base_config import RunConfig
 from algorithms.base import Algorithm
 
 
 @dataclass
 class PPOConfig:
     """PPO algorithm hyperparameters for continuous actions."""
-
     learning_rate: float = 3e-4
     """the learning rate of the optimizer"""
     num_steps: int = 2048
@@ -73,15 +71,15 @@ class Args(RunConfig):
     """Full configuration for PPO with continuous actions.
 
     Inherits run-level fields from :class:`RunConfig` and composes
-    :class:`AgentConfig` (network architecture) and :class:`PPOConfig`
-    (algorithm hyperparameters).
+    :class:`PPOConfig` (algorithm hyperparameters); the network is
+    ``network`` + ``network_kwargs`` (see :func:`networks.get_network`).
     """
-
     algorithm: str = "ppo_continuous_action"
 
     # Nested configs
-    agent: AgentConfig = field(default_factory=AgentConfig)
-    """network architecture configuration"""
+    network: str = "ContinuousActorCritic"
+    """network class to build (see ``RunConfig.network``); any class with
+    the interface of ``ContinuousActorCritic`` works"""
     ppo_continuous_action: PPOConfig = field(default_factory=PPOConfig)
     """PPO hyperparameters — the field name deliberately equals the algorithm
     name, so the YAML section, saved run configs (``asdict``), and CLI
@@ -149,36 +147,19 @@ class PPO(Algorithm):
 
         self._setup_logging_and_checkpoints()
 
-        assert isinstance(self.envs.single_action_space, gym.spaces.Box), (
-            "only continuous action space is supported"
-        )
+        assert isinstance(self.envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
 
-        self.agent = ContinuousActorCritic(
-            self.envs,
-            args.agent.activation,
-            args.agent.hidden_layers_size,
-            use_obs_norm=args.agent.use_obs_norm,
-            obs_norm_epsilon=args.agent.obs_norm_epsilon,
-        ).to(self.device)
-        self.optimizer = optim.Adam(
-            self.agent.parameters(), lr=args.algo.learning_rate, eps=1e-5
-        )
+        self.agent = get_network(args.network)(self.envs, **args.network_kwargs).to(self.device)
+        self.optimizer = optim.Adam(self.agent.parameters(), lr=args.algo.learning_rate, eps=1e-5)
 
         self.last_iteration_resume = 0
         if self.resuming:
             self._resume_from_checkpoint()
 
         # ALGO Logic: Storage setup
-        self.obs = torch.zeros(
-            (args.algo.num_steps, args.num_envs)
-            + self.envs.single_observation_space.shape
-        ).to(self.device)
-        self.actions = torch.zeros(
-            (args.algo.num_steps, args.num_envs) + self.envs.single_action_space.shape
-        ).to(self.device)
-        self.logprobs = torch.zeros((args.algo.num_steps, args.num_envs)).to(
-            self.device
-        )
+        self.obs = torch.zeros((args.algo.num_steps, args.num_envs) + self.envs.single_observation_space.shape).to(self.device)
+        self.actions = torch.zeros((args.algo.num_steps, args.num_envs) + self.envs.single_action_space.shape).to(self.device)
+        self.logprobs = torch.zeros((args.algo.num_steps, args.num_envs)).to(self.device)
         self.rewards = torch.zeros((args.algo.num_steps, args.num_envs)).to(self.device)
         self.dones = torch.zeros((args.algo.num_steps, args.num_envs)).to(self.device)
         self.values = torch.zeros((args.algo.num_steps, args.num_envs)).to(self.device)
@@ -191,6 +172,7 @@ class PPO(Algorithm):
             self.next_obs = torch.Tensor(self.next_obs).to(self.device)
             self.next_done = torch.zeros(args.num_envs).to(self.device)
             self.global_ep_counter = 0
+            self.num_updates = 0
             self.recent_ep_returns = deque(maxlen=100)
             self.recent_ep_lengths = deque(maxlen=100)
         else:
@@ -223,15 +205,9 @@ class PPO(Algorithm):
             envs.close()
             return
 
-        with tqdm(
-            range(iter_start, args.num_iterations + 1),
-            desc="PPO iterations",
-            unit="iter",
-        ) as pbar:
+        with tqdm(range(iter_start, args.num_iterations + 1), desc="PPO iterations", unit="iter") as pbar:
             for iteration in pbar:
-                self.iteration = (
-                    iteration  # persisted in checkpoints as `last_iteration`
-                )
+                self.iteration = iteration  # persisted in checkpoints as `last_iteration`
 
                 # Annealing the rate if instructed to do so.
                 if cfg.anneal_lr:
@@ -255,26 +231,20 @@ class PPO(Algorithm):
 
                     # ALGO LOGIC: action logic
                     with torch.no_grad():
-                        action, logprob, _, value = agent.get_action_and_value(
-                            obs_input, input_is_normalized=True
-                        )
+                        action, logprob, _, value = agent.get_action_and_value(obs_input, input_is_normalized=True)
                         self.values[step] = value.flatten()
                     self.actions[step] = action
                     self.logprobs[step] = logprob
 
                     # Execute the game and log data (unchanged from CleanRL).
-                    next_obs, reward, terminations, truncations, infos = envs.step(
-                        action.cpu().numpy()
-                    )
+                    next_obs, reward, terminations, truncations, infos = envs.step(action.cpu().numpy())
                     next_done = np.logical_or(terminations, truncations)
                     self.rewards[step] = torch.tensor(reward).to(device).view(-1)
                     self.next_obs = torch.Tensor(next_obs).to(device)
                     self.next_done = torch.Tensor(next_done).to(device)
 
                     completed_returns, completed_lengths, completed_successes = (
-                        episode_completions_from_vector_infos(
-                            terminations, truncations, infos
-                        )
+                        episode_completions_from_vector_infos(terminations, truncations, infos)
                     )
                     if completed_returns:
                         self.recent_ep_returns.extend(completed_returns)
@@ -297,15 +267,8 @@ class PPO(Algorithm):
                         else:
                             nextnonterminal = 1.0 - self.dones[t + 1]
                             nextvalues = self.values[t + 1]
-                        delta = (
-                            self.rewards[t]
-                            + cfg.gamma * nextvalues * nextnonterminal
-                            - self.values[t]
-                        )
-                        advantages[t] = lastgaelam = (
-                            delta
-                            + cfg.gamma * cfg.gae_lambda * nextnonterminal * lastgaelam
-                        )
+                        delta = self.rewards[t] + cfg.gamma * nextvalues * nextnonterminal - self.values[t]
+                        advantages[t] = lastgaelam = delta + cfg.gamma * cfg.gae_lambda * nextnonterminal * lastgaelam
                     returns = advantages + self.values
 
                 # flatten the batch
@@ -336,24 +299,15 @@ class PPO(Algorithm):
                             # calculate approx_kl http://joschu.net/blog/kl-approx.html
                             old_approx_kl = (-logratio).mean()
                             approx_kl = ((ratio - 1) - logratio).mean()
-                            clipfracs += [
-                                ((ratio - 1.0).abs() > cfg.clip_coef)
-                                .float()
-                                .mean()
-                                .item()
-                            ]
+                            clipfracs += [((ratio - 1.0).abs() > cfg.clip_coef).float().mean().item()]
 
                         mb_advantages = b_advantages[mb_inds]
                         if cfg.norm_adv:
-                            mb_advantages = (mb_advantages - mb_advantages.mean()) / (
-                                mb_advantages.std() + 1e-8
-                            )
+                            mb_advantages = (mb_advantages - mb_advantages.mean()) / (mb_advantages.std() + 1e-8)
 
                         # Policy loss
                         pg_loss1 = -mb_advantages * ratio
-                        pg_loss2 = -mb_advantages * torch.clamp(
-                            ratio, 1 - cfg.clip_coef, 1 + cfg.clip_coef
-                        )
+                        pg_loss2 = -mb_advantages * torch.clamp(ratio, 1 - cfg.clip_coef, 1 + cfg.clip_coef)
                         pg_loss = torch.max(pg_loss1, pg_loss2).mean()
 
                         # Value loss
@@ -372,17 +326,14 @@ class PPO(Algorithm):
                             v_loss = 0.5 * ((newvalue - b_returns[mb_inds]) ** 2).mean()
 
                         entropy_loss = entropy.mean()
-                        loss = (
-                            pg_loss - cfg.ent_coef * entropy_loss + v_loss * cfg.vf_coef
-                        )
+                        loss = pg_loss - cfg.ent_coef * entropy_loss + v_loss * cfg.vf_coef
                         self.optimizer.zero_grad()
                         loss.backward()
-                        grad_norm = nn.utils.clip_grad_norm_(
-                            agent.parameters(), cfg.max_grad_norm
-                        )
+                        grad_norm = nn.utils.clip_grad_norm_(agent.parameters(), cfg.max_grad_norm)
                         # clip_grad_norm_ returns a (possibly CUDA) scalar tensor; .item() is device-safe
                         grad_norms.append(float(grad_norm.detach().item()))
                         self.optimizer.step()
+                        self.num_updates += 1
 
                     if cfg.target_kl is not None and approx_kl > cfg.target_kl:
                         break
@@ -403,17 +354,12 @@ class PPO(Algorithm):
                     rollout_ep_successes=rollout_ep_successes,
                 )
 
-                if (
-                    self.checkpoint_every > 0
-                    and self.global_step >= self.next_checkpoint_step
-                ):
+                if self.checkpoint_every > 0 and self.global_step >= self.next_checkpoint_step:
                     while self.next_checkpoint_step <= self.global_step:
                         self.next_checkpoint_step += self.checkpoint_every
                     save_checkpoint(
-                        self.run_dir,
-                        self.global_step,
-                        self.checkpoint_state_dict(),
-                        self.checkpoints_keep,
+                        self.run_dir, self.global_step,
+                        self.checkpoint_state_dict(), self.checkpoints_keep,
                     )
 
         self._post_training_eval()
@@ -478,45 +424,32 @@ class PPO(Algorithm):
             "losses/clipfrac": np.mean(clipfracs),
             "losses/explained_variance": explained_var,
             "charts/SPS": sps,
+            "charts/num_updates": self.num_updates,
             "global_step": self.global_step,
         }
         metrics_dict["charts/learning_rate"] = self.optimizer.param_groups[0]["lr"]
-        metrics_dict["losses/grad_norm"] = (
-            float(np.mean(grad_norms)) if len(grad_norms) else 0.0
-        )
+        metrics_dict["losses/grad_norm"] = float(np.mean(grad_norms)) if len(grad_norms) else 0.0
 
         # Episode metrics: log ONCE per PPO iteration (running mean over last 100 completed episodes).
         if len(self.recent_ep_returns) > 0:
             metrics_dict.update(
                 {
-                    "charts/episodic_return_mean_last100": float(
-                        np.mean(self.recent_ep_returns)
-                    ),
-                    "charts/episodic_length_mean_last100": float(
-                        np.mean(self.recent_ep_lengths)
-                    )
-                    if len(self.recent_ep_lengths) > 0
-                    else 0.0,
+                    "charts/episodic_return_mean_last100": float(np.mean(self.recent_ep_returns)),
+                    "charts/episodic_length_mean_last100": float(np.mean(self.recent_ep_lengths)) if len(self.recent_ep_lengths) > 0 else 0.0,
                     "charts/num_episodes": self.global_ep_counter,
                 }
             )
         if rollout_ep_returns:
-            metrics_dict["rollout/mean_episode_return"] = float(
-                np.mean(rollout_ep_returns)
-            )
+            metrics_dict["rollout/mean_episode_return"] = float(np.mean(rollout_ep_returns))
             metrics_dict["rollout/episodes_completed"] = int(len(rollout_ep_returns))
         if rollout_ep_successes:
-            metrics_dict["rollout/mean_success_rate"] = float(
-                np.mean(rollout_ep_successes)
-            )
+            metrics_dict["rollout/mean_success_rate"] = float(np.mean(rollout_ep_successes))
 
         # Special logging (e.g., weight histograms) every X global steps.
         # Use a threshold (not modulo) because global_step increments by num_envs.
         if self.global_step >= self.next_special_log_step:
             for name, param in self.agent.named_parameters():
-                metrics_dict[f"weights/{name}"] = wandb.Histogram(
-                    param.detach().clone().cpu().numpy()
-                )
+                metrics_dict[f"weights/{name}"] = wandb.Histogram(param.detach().clone().cpu().numpy())
             # Advance schedule; keep incrementing in case we skipped over multiple thresholds.
             while self.next_special_log_step <= self.global_step:
                 self.next_special_log_step += self.special_log_every
@@ -546,6 +479,7 @@ class PPO(Algorithm):
             "next_obs": self.next_obs.detach().cpu(),
             "next_done": self.next_done.detach().cpu(),
             "global_ep_counter": int(self.global_ep_counter),
+            "num_updates": int(self.num_updates),
             "recent_ep_returns": list(self.recent_ep_returns),
             "recent_ep_lengths": list(self.recent_ep_lengths),
         }
@@ -570,6 +504,7 @@ class PPO(Algorithm):
         self.next_obs = state["next_obs"].to(self.device)
         self.next_done = state["next_done"].to(self.device)
         self.global_ep_counter = int(state["global_ep_counter"])
+        self.num_updates = int(state.get("num_updates", 0))  # absent in older checkpoints
         self.recent_ep_returns = deque(state["recent_ep_returns"], maxlen=100)
         self.recent_ep_lengths = deque(state["recent_ep_lengths"], maxlen=100)
 
