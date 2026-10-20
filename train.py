@@ -102,7 +102,7 @@ def main():
     print(f"Experiment name: {args.exp_name}")
     print(f"Env: {args.env_id} kwargs={args.env_kwargs}")
     print(f"Total timesteps: {args.total_timesteps:,}")
-    print(f"Learning rate: {args.algo.learning_rate}")
+    print(f"Learning rate: {getattr(args.algo, 'learning_rate', 'n/a')}")
     print(f"Number of environments: {args.num_envs}")
     print(f"Seed: {args.seed}")
 
